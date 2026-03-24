@@ -14,7 +14,7 @@ A Craft CMS module that automatically redirects visitors from `/` to their local
 ## Requirements
 
 - PHP 8.2+
-- Craft CMS 4 or 5
+- Craft CMS 5
 
 ## Installation
 
@@ -92,6 +92,10 @@ The URL to redirect to when no browser locale matches. Defaults to the primary s
 ```php
 'fallback' => '/en',
 ```
+
+## Branching and Versioning
+
+This package follows [Semantic Versioning](https://semver.org/). Only Craft 5 is supported.
 
 ## License
 
