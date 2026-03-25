@@ -9,6 +9,8 @@ class Module extends BaseModule
 {
     public function init(): void
     {
+        Craft::setAlias('@Noo/CraftLocaleRedirect', __DIR__);
+
         parent::init();
 
         Craft::$app->onInit(function () {
