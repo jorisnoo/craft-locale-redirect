@@ -59,7 +59,10 @@ class Module extends BaseModule
         $fallbackUrl = $config['fallback'] ?? Craft::$app->getSites()->getPrimarySite()->getBaseUrl();
         $redirectUrl = $matchedLocale !== null ? $localeUrlMap[$matchedLocale] : $fallbackUrl;
 
-        Craft::$app->getResponse()->redirect($redirectUrl, 302)->send();
+        $response = Craft::$app->getResponse();
+        $response->getHeaders()->set('Cache-Control', 'no-store, no-cache, must-revalidate');
+        $response->getHeaders()->set('Vary', 'Accept-Language');
+        $response->redirect($redirectUrl, 302)->send();
         Craft::$app->end();
     }
 
