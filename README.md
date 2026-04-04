@@ -7,7 +7,7 @@ A Craft CMS module that automatically redirects visitors from `/` to their local
 - Detects the visitor's preferred language from the `Accept-Language` header
 - Matches it against your Craft multi-site locales
 - Redirects from `/` to the best-matching locale home URL (e.g. `/en`, `/fr`, `/de`)
-- Skips bots and crawlers to preserve SEO
+- Preserves query parameters through the redirect
 - Configurable locale exclusions and restrictions
 - Zero configuration required for basic usage
 
@@ -42,9 +42,7 @@ When a visitor hits your site's root URL (`/`), the module:
 3. Finds the best match between browser preferences and available locales
 4. Issues a `302` redirect to the matched locale's home URL
 
-If no match is found, the visitor is redirected to the primary site's URL (or a configured fallback).
-
-Bots and crawlers are automatically excluded from redirection so they can index your root URL normally.
+If no match is found, the visitor is redirected to the primary site's URL (or a configured fallback). Query parameters are preserved through the redirect.
 
 ## Configuration
 
