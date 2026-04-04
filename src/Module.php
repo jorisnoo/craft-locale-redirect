@@ -43,10 +43,6 @@ class Module extends BaseModule
             return;
         }
 
-        if ($this->isBot($request->getHeaders()->get('User-Agent', ''))) {
-            return;
-        }
-
         $localeUrlMap = $this->getLocaleUrlMap();
         $localeUrlMap = $this->filterLocales($localeUrlMap, $config);
 
@@ -101,28 +97,5 @@ class Module extends BaseModule
         }
 
         return $localeUrlMap;
-    }
-
-    private function isBot(string $userAgent): bool
-    {
-        if ($userAgent === '') {
-            return true;
-        }
-
-        $botPatterns = [
-            'bot', 'crawl', 'spider', 'slurp', 'mediapartners',
-            'facebookexternalhit', 'embedly', 'quora link preview',
-            'outbrain', 'pinterest', 'semrush', 'ahrefs',
-        ];
-
-        $userAgentLower = strtolower($userAgent);
-
-        foreach ($botPatterns as $pattern) {
-            if (str_contains($userAgentLower, $pattern)) {
-                return true;
-            }
-        }
-
-        return false;
     }
 }
