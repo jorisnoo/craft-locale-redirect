@@ -44,7 +44,7 @@ class Module extends BaseModule
         }
 
         $localeUrlMap = $this->getLocaleUrlMap();
-        $localeUrlMap = $this->filterLocales($localeUrlMap, $config);
+        $localeUrlMap = LocaleFilter::filter($localeUrlMap, $config);
 
         $matcher = new BrowserLocaleMatcher;
         $matchedLocale = $matcher->match(
@@ -90,24 +90,4 @@ class Module extends BaseModule
         return $map;
     }
 
-    /**
-     * @param  array<string, string>  $localeUrlMap
-     * @return array<string, string>
-     */
-    private function filterLocales(array $localeUrlMap, array $config): array
-    {
-        $only = $config['only'] ?? [];
-
-        if (! empty($only)) {
-            return array_intersect_key($localeUrlMap, array_flip($only));
-        }
-
-        $exclude = $config['exclude'] ?? [];
-
-        if (! empty($exclude)) {
-            return array_diff_key($localeUrlMap, array_flip($exclude));
-        }
-
-        return $localeUrlMap;
-    }
 }
