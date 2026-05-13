@@ -29,7 +29,6 @@ class Module extends BaseModule
             || $request->getIsPreview()
             || $request->getIsLivePreview()
             || $request->getMethod() !== 'GET'
-            || $request->getFullUri() !== ''
         ) {
             return;
         }
@@ -46,14 +45,30 @@ class Module extends BaseModule
         $localeUrlMap = $this->getLocaleUrlMap();
         $localeUrlMap = LocaleFilter::filter($localeUrlMap, $config);
 
-        $matcher = new BrowserLocaleMatcher;
-        $matchedLocale = $matcher->match(
-            array_keys($localeUrlMap),
-            $request->getHeaders()->get('Accept-Language', ''),
-        );
+        $path = '/' . ltrim($request->getPathInfo(), '/');
 
-        $fallbackUrl = $config['fallback'] ?? Craft::$app->getSites()->getPrimarySite()->getBaseUrl();
-        $redirectUrl = $matchedLocale !== null ? $localeUrlMap[$matchedLocale] : $fallbackUrl;
+        // Bail if the request is already on a known locale prefix.
+        foreach ($localeUrlMap as $url) {
+            $prefix = rtrim(parse_url($url, PHP_URL_PATH) ?? '', '/');
+            if ($prefix !== '' && ($path === $prefix || str_starts_with($path, $prefix . '/'))) {
+                return;
+            }
+        }
+
+        $isLocaleMatch = $path === '/';
+
+        if ($isLocaleMatch) {
+            $matcher = new BrowserLocaleMatcher;
+            $matchedLocale = $matcher->match(
+                array_keys($localeUrlMap),
+                $request->getHeaders()->get('Accept-Language', ''),
+            );
+
+            $fallbackUrl = $config['fallback'] ?? Craft::$app->getSites()->getPrimarySite()->getBaseUrl();
+            $redirectUrl = $matchedLocale !== null ? $localeUrlMap[$matchedLocale] : $fallbackUrl;
+        } else {
+            $redirectUrl = rtrim($currentSite->getBaseUrl(), '/') . $path;
+        }
 
         // Prevent redirect loop when the target URL is the current URL
         $currentUrl = $request->getAbsoluteUrl();
@@ -68,9 +83,11 @@ class Module extends BaseModule
         }
 
         $response = Craft::$app->getResponse();
-        $response->getHeaders()->set('Cache-Control', 'no-store, no-cache, must-revalidate');
-        $response->getHeaders()->set('Vary', 'Accept-Language');
-        $response->redirect($redirectUrl, 302)->send();
+        if ($isLocaleMatch) {
+            $response->getHeaders()->set('Cache-Control', 'no-store, no-cache, must-revalidate');
+            $response->getHeaders()->set('Vary', 'Accept-Language');
+        }
+        $response->redirect($redirectUrl, $isLocaleMatch ? 302 : 301)->send();
         Craft::$app->end();
     }
 

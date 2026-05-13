@@ -2,11 +2,20 @@
     "name": "jorisnoo/craft-locale-redirect",
     "description": "Browser locale detection and redirect for Craft CMS",
     "license": "MIT",
-    "keywords": ["craft", "cms", "craftcms", "locale", "redirect", "language", "i18n"],
+    "keywords": [
+        "craft",
+        "cms",
+        "craftcms",
+        "locale",
+        "redirect",
+        "language",
+        "i18n"
+    ],
     "authors": [
         {
             "name": "Joris Noordermeer",
-            "email": "contact@noordermeer.ch"
+            "email": "contact@noordermeer.ch",
+            "homepage": "https://github.com/jorisnoo"
         }
     ],
     "require": {
