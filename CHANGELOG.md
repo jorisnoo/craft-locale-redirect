@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.2](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/v1.0.2) (2026-05-13)
+
+### Bug Fixes
+
+- normalize locale paths to lowercase ([c0d8fbc](https://github.com/jorisnoo/craft-locale-redirect/commit/c0d8fbc055e8598c9270e3fd754da271d670d135))
+- use raw path info for locale matching ([3aa75fc](https://github.com/jorisnoo/craft-locale-redirect/commit/3aa75fcd7ff26c3654423c0dae344c041ef00734))
+
+### Code Refactoring
+
+- extract redirect resolution logic into testable RedirectResolver class ([99775c8](https://github.com/jorisnoo/craft-locale-redirect/commit/99775c8268c3480eebf9100a9b7272dda21d5de7))
 ## [1.0.1](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/v1.0.1) (2026-05-13)
 
 ### Code Refactoring
