@@ -45,7 +45,7 @@ class Module extends BaseModule
         $localeUrlMap = $this->getLocaleUrlMap();
         $localeUrlMap = LocaleFilter::filter($localeUrlMap, $config);
 
-        $path = '/' . ltrim($request->getPathInfo(), '/');
+        $path = '/' . ltrim($request->getPathInfo(true), '/');
 
         // Bail if the request is already on a known locale prefix.
         foreach ($localeUrlMap as $url) {
