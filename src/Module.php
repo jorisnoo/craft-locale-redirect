@@ -43,14 +43,25 @@ class Module extends BaseModule
         }
 
         $localeUrlMap = $this->getLocaleUrlMap();
-        $localeUrlMap = LocaleFilter::filter($localeUrlMap, $config);
 
-        $path = '/' . ltrim($request->getPathInfo(true), '/');
+        $rawPath = '/' . ltrim($request->getPathInfo(true), '/');
+        $path = strtolower($rawPath);
 
-        // Bail if the request is already on a known locale prefix.
+        // Bail if already on a known site's URL prefix.
+        // If the case differs from the canonical lowercase, redirect to the lowercase form first.
         foreach ($localeUrlMap as $url) {
-            $prefix = rtrim(parse_url($url, PHP_URL_PATH) ?? '', '/');
+            $prefix = strtolower(rtrim(parse_url($url, PHP_URL_PATH) ?? '', '/'));
             if ($prefix !== '' && ($path === $prefix || str_starts_with($path, $prefix . '/'))) {
+                if ($path === $rawPath) {
+                    return;
+                }
+                $redirectUrl = $request->getHostInfo() . $path;
+                $queryString = $request->getQueryString();
+                if ($queryString !== null && $queryString !== '') {
+                    $redirectUrl .= '?' . $queryString;
+                }
+                Craft::$app->getResponse()->redirect($redirectUrl, 301)->send();
+                Craft::$app->end();
                 return;
             }
         }
@@ -58,14 +69,15 @@ class Module extends BaseModule
         $isLocaleMatch = $path === '/';
 
         if ($isLocaleMatch) {
+            $availableLocales = LocaleFilter::filter($localeUrlMap, $config);
             $matcher = new BrowserLocaleMatcher;
             $matchedLocale = $matcher->match(
-                array_keys($localeUrlMap),
+                array_keys($availableLocales),
                 $request->getHeaders()->get('Accept-Language', ''),
             );
 
             $fallbackUrl = $config['fallback'] ?? Craft::$app->getSites()->getPrimarySite()->getBaseUrl();
-            $redirectUrl = $matchedLocale !== null ? $localeUrlMap[$matchedLocale] : $fallbackUrl;
+            $redirectUrl = $matchedLocale !== null ? $availableLocales[$matchedLocale] : $fallbackUrl;
         } else {
             $redirectUrl = rtrim($currentSite->getBaseUrl(), '/') . $path;
         }
