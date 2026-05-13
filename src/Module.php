@@ -36,70 +36,37 @@ class Module extends BaseModule
         $config = Craft::$app->config->getConfigFromFile('locale-redirect');
         $currentSite = Craft::$app->getSites()->getCurrentSite();
 
-        // Check if this site should trigger redirects
-        $excludeSites = $config['excludeSites'] ?? [];
-        if (in_array($currentSite->handle, $excludeSites, true)) {
+        if (in_array($currentSite->handle, $config['excludeSites'] ?? [], true)) {
             return;
         }
 
-        $localeUrlMap = $this->getLocaleUrlMap();
+        $decision = (new RedirectResolver)->resolve(
+            rawPath: '/' . ltrim($request->getPathInfo(true), '/'),
+            hostInfo: $request->getHostInfo(),
+            currentAbsoluteUrl: $request->getAbsoluteUrl(),
+            currentSiteBaseUrl: $currentSite->getBaseUrl(),
+            primarySiteBaseUrl: Craft::$app->getSites()->getPrimarySite()->getBaseUrl(),
+            acceptLanguage: $request->getHeaders()->get('Accept-Language', ''),
+            localeUrlMap: $this->getLocaleUrlMap(),
+            config: $config,
+        );
 
-        $rawPath = '/' . ltrim($request->getPathInfo(true), '/');
-        $path = strtolower($rawPath);
-
-        // Bail if already on a known site's URL prefix.
-        // If the case differs from the canonical lowercase, redirect to the lowercase form first.
-        foreach ($localeUrlMap as $url) {
-            $prefix = strtolower(rtrim(parse_url($url, PHP_URL_PATH) ?? '', '/'));
-            if ($prefix !== '' && ($path === $prefix || str_starts_with($path, $prefix . '/'))) {
-                if ($path === $rawPath) {
-                    return;
-                }
-                $redirectUrl = $request->getHostInfo() . $path;
-                $queryString = $request->getQueryString();
-                if ($queryString !== null && $queryString !== '') {
-                    $redirectUrl .= '?' . $queryString;
-                }
-                Craft::$app->getResponse()->redirect($redirectUrl, 301)->send();
-                Craft::$app->end();
-                return;
-            }
-        }
-
-        $isLocaleMatch = $path === '/';
-
-        if ($isLocaleMatch) {
-            $availableLocales = LocaleFilter::filter($localeUrlMap, $config);
-            $matcher = new BrowserLocaleMatcher;
-            $matchedLocale = $matcher->match(
-                array_keys($availableLocales),
-                $request->getHeaders()->get('Accept-Language', ''),
-            );
-
-            $fallbackUrl = $config['fallback'] ?? Craft::$app->getSites()->getPrimarySite()->getBaseUrl();
-            $redirectUrl = $matchedLocale !== null ? $availableLocales[$matchedLocale] : $fallbackUrl;
-        } else {
-            $redirectUrl = rtrim($currentSite->getBaseUrl(), '/') . $path;
-        }
-
-        // Prevent redirect loop when the target URL is the current URL
-        $currentUrl = $request->getAbsoluteUrl();
-        if (rtrim($redirectUrl, '/') === rtrim($currentUrl, '/')) {
+        if ($decision === null) {
             return;
         }
 
-        // Preserve query parameters
+        $url = $decision->url;
         $queryString = $request->getQueryString();
         if ($queryString !== null && $queryString !== '') {
-            $redirectUrl .= (str_contains($redirectUrl, '?') ? '&' : '?') . $queryString;
+            $url .= (str_contains($url, '?') ? '&' : '?') . $queryString;
         }
 
         $response = Craft::$app->getResponse();
-        if ($isLocaleMatch) {
+        if ($decision->varyByLocale) {
             $response->getHeaders()->set('Cache-Control', 'no-store, no-cache, must-revalidate');
             $response->getHeaders()->set('Vary', 'Accept-Language');
         }
-        $response->redirect($redirectUrl, $isLocaleMatch ? 302 : 301)->send();
+        $response->redirect($url, $decision->statusCode)->send();
         Craft::$app->end();
     }
 
