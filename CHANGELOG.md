@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.1](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/v1.0.1) (2026-05-13)
+
+### Code Refactoring
+
+- improve locale redirect with path-aware handling ([de455b3](https://github.com/jorisnoo/craft-locale-redirect/commit/de455b3c5e613bf1586e2db620b29d946953ddcf))
 ## [1.0.0](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/v1.0.0) (2026-05-12)
 
 ### ⚠ BREAKING CHANGES
