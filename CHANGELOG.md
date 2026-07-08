@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.4](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/v1.0.4) (2026-07-08)
+
+### Bug Fixes
+
+- decode percent-encoded URLs in redirect loop check ([937a8f6](https://github.com/jorisnoo/craft-locale-redirect/commit/937a8f6c2a1afc435f24b4bb15cb8bce7307d7fd))
 ## [1.0.3](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/v1.0.3) (2026-07-08)
 
 ### Bug Fixes
