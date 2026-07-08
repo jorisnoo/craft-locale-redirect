@@ -45,7 +45,13 @@ class RedirectResolver
             $redirectUrl = rtrim($currentSiteBaseUrl, '/') . $path;
         }
 
-        if (rtrim($redirectUrl, '/') === rtrim($currentAbsoluteUrl, '/')) {
+        // Compare against the current URL without its query string: the redirect
+        // target is built from the path only, and Module re-appends the query
+        // string afterwards. Without stripping it here, a query-string-only
+        // request (e.g. ?vd-scan=1) slips past this guard and loops forever.
+        $currentUrlWithoutQuery = strtok($currentAbsoluteUrl, '?');
+
+        if (rtrim($redirectUrl, '/') === rtrim($currentUrlWithoutQuery, '/')) {
             return null;
         }
 

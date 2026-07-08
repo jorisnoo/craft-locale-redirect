@@ -127,6 +127,41 @@ it('returns null when the computed redirect equals the current absolute URL (loo
     expect($decision)->toBeNull();
 });
 
+it('returns null at root when only a query string differs from the canonical URL (loop prevention)', function () {
+    $decision = resolve([
+        'rawPath' => '/',
+        'acceptLanguage' => 'en',
+        'currentAbsoluteUrl' => 'http://example.test/?vd-scan=1',
+        'primarySiteBaseUrl' => 'http://example.test/',
+        'currentSiteBaseUrl' => 'http://example.test/',
+        'localeUrlMap' => ['en' => 'http://example.test/'],
+    ]);
+
+    expect($decision)->toBeNull();
+});
+
+it('returns null when an already-canonical unprefixed path carries a query string (loop prevention)', function () {
+    $decision = resolve([
+        'rawPath' => '/kalender/foo',
+        'currentAbsoluteUrl' => 'http://example.test/kalender/foo?vd-scan=1',
+        'currentSiteBaseUrl' => 'http://example.test/',
+        'localeUrlMap' => ['de' => 'http://example.test/'],
+    ]);
+
+    expect($decision)->toBeNull();
+});
+
+it('still redirects to canonicalize an unprefixed path even when a query string is present', function () {
+    $decision = resolve([
+        'rawPath' => '/news/foo',
+        'currentAbsoluteUrl' => 'http://example.test/news/foo?vd-scan=1',
+        'currentSiteBaseUrl' => 'http://example.test/de/',
+    ]);
+
+    expect($decision->url)->toBe('http://example.test/de/news/foo');
+    expect($decision->statusCode)->toBe(301);
+});
+
 it('ignores sites with no URL path prefix when checking for a locale match', function () {
     $decision = resolve([
         'rawPath' => '/some-path',
