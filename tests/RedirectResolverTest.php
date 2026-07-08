@@ -162,6 +162,19 @@ it('still redirects to canonicalize an unprefixed path even when a query string 
     expect($decision->statusCode)->toBe(301);
 });
 
+it('returns null when the current URL is percent-encoded but already canonical (loop prevention)', function () {
+    // getPathInfo() is urldecoded ("/münchen") while getAbsoluteUrl() stays
+    // percent-encoded ("/m%C3%BCnchen"). The guard must compare like for like.
+    $decision = resolve([
+        'rawPath' => '/münchen',
+        'currentAbsoluteUrl' => 'http://example.test/m%C3%BCnchen',
+        'currentSiteBaseUrl' => 'http://example.test/',
+        'localeUrlMap' => ['de' => 'http://example.test/'],
+    ]);
+
+    expect($decision)->toBeNull();
+});
+
 it('ignores sites with no URL path prefix when checking for a locale match', function () {
     $decision = resolve([
         'rawPath' => '/some-path',

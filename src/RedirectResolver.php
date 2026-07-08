@@ -45,13 +45,15 @@ class RedirectResolver
             $redirectUrl = rtrim($currentSiteBaseUrl, '/') . $path;
         }
 
-        // Compare against the current URL without its query string: the redirect
-        // target is built from the path only, and Module re-appends the query
-        // string afterwards. Without stripping it here, a query-string-only
-        // request (e.g. ?vd-scan=1) slips past this guard and loops forever.
-        $currentUrlWithoutQuery = strtok($currentAbsoluteUrl, '?');
+        // Normalize the current URL before comparing it to the redirect target,
+        // which is built from the decoded path ($rawPath comes from a urldecoded
+        // getPathInfo()). getAbsoluteUrl() keeps the client's percent-encoding
+        // and its query string, so without stripping the query and decoding the
+        // path a request that is already canonical (e.g. ?vd-scan=1, or an
+        // umlaut slug like /m%C3%BCnchen) slips past this guard and loops forever.
+        $currentUrlNormalized = rawurldecode(strtok($currentAbsoluteUrl, '?'));
 
-        if (rtrim($redirectUrl, '/') === rtrim($currentUrlWithoutQuery, '/')) {
+        if (rtrim($redirectUrl, '/') === rtrim($currentUrlNormalized, '/')) {
             return null;
         }
 
