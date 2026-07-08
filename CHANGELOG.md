@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.3](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/v1.0.3) (2026-07-08)
+
+### Bug Fixes
+
+- strip query string when checking for redirect loops ([0d7aece](https://github.com/jorisnoo/craft-locale-redirect/commit/0d7aece16b710b3ed2aa822cf312cc6e7b79cb88))
+
+### Chores
+
+- add justfile ([5df0204](https://github.com/jorisnoo/craft-locale-redirect/commit/5df0204507b10f6bcab83ebea514a67c7997bd56))
+- **deps:** bump actions/checkout from 6 to 7 ([5b07905](https://github.com/jorisnoo/craft-locale-redirect/commit/5b07905886252f743e3328808fb7ed114e823248))
 ## [1.0.2](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/v1.0.2) (2026-05-13)
 
 ### Bug Fixes
