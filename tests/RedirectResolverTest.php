@@ -250,6 +250,66 @@ it('matches locale prefix case-insensitively against canonical lowercase prefix'
     expect($decision->url)->toBe('http://example.test/en/about');
 });
 
+it('keeps the visitor on an alias host when redirecting root to a locale', function () {
+    // Request arrives on an alias/staging domain that is not one of the
+    // configured site hosts. The locale redirect must stay on that host.
+    $decision = resolve([
+        'rawPath' => '/',
+        'hostInfo' => 'http://staging.example.test',
+        'currentAbsoluteUrl' => 'http://staging.example.test/',
+        'acceptLanguage' => 'de-CH,de;q=0.9',
+    ]);
+
+    expect($decision->url)->toBe('http://staging.example.test/de/');
+    expect($decision->statusCode)->toBe(302);
+});
+
+it('keeps the visitor on an alias host when falling back to the primary base URL', function () {
+    $decision = resolve([
+        'rawPath' => '/',
+        'hostInfo' => 'http://staging.example.test',
+        'currentAbsoluteUrl' => 'http://staging.example.test/',
+        'acceptLanguage' => 'ja',
+        'primarySiteBaseUrl' => 'http://example.test/de/',
+    ]);
+
+    expect($decision->url)->toBe('http://staging.example.test/de/');
+});
+
+it('keeps the visitor on an alias host when canonicalizing an unprefixed path', function () {
+    $decision = resolve([
+        'rawPath' => '/news/foo',
+        'hostInfo' => 'http://staging.example.test',
+        'currentAbsoluteUrl' => 'http://staging.example.test/news/foo',
+        'currentSiteBaseUrl' => 'http://example.test/de/',
+    ]);
+
+    expect($decision->url)->toBe('http://staging.example.test/de/news/foo');
+    expect($decision->statusCode)->toBe(301);
+});
+
+it('stays on the current host when the locale map is registered under another host', function () {
+    // Per-edition multisite: every edition lives on its own domain but shares
+    // the same locale path prefixes, so the locale map collapses onto whichever
+    // edition's host happens to come first. The root redirect must still keep
+    // the visitor on the host they arrived on, using only the matched prefix.
+    $decision = resolve([
+        'rawPath' => '/',
+        'hostInfo' => 'http://edition24.test',
+        'currentAbsoluteUrl' => 'http://edition24.test/',
+        'currentSiteBaseUrl' => 'http://edition24.test/de/',
+        'primarySiteBaseUrl' => 'http://primary.test/de/',
+        'acceptLanguage' => 'fr-CH,fr;q=0.9',
+        'localeUrlMap' => [
+            'de' => 'http://edition22.test/de/',
+            'fr' => 'http://edition22.test/fr/',
+        ],
+    ]);
+
+    expect($decision->url)->toBe('http://edition24.test/fr/');
+    expect($decision->statusCode)->toBe(302);
+});
+
 it('preserves the host info when canonicalizing case', function () {
     $decision = resolve([
         'rawPath' => '/DE/',

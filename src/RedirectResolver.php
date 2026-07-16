@@ -39,10 +39,27 @@ class RedirectResolver
                 $acceptLanguage,
             );
 
-            $fallbackUrl = $config['fallback'] ?? $primarySiteBaseUrl;
-            $redirectUrl = $matchedLocale !== null ? $availableLocales[$matchedLocale] : $fallbackUrl;
+            // The locale map and the primary base URL are built from the sites'
+            // configured base URLs, so they carry whatever host those sites are
+            // registered under -- which need not be the host the request came in
+            // on. Several sites can also share a locale path prefix across
+            // different hosts (e.g. a per-edition multisite where every edition
+            // has its own domain but the same `/de` and `/fr` prefixes), so the
+            // map's host is not a reliable redirect target at all. Only the path
+            // prefix identifies the locale; keep the visitor on the host they
+            // arrived on. An explicit `fallback` is an intentional override, so
+            // it is honored verbatim (it may deliberately point elsewhere).
+            if ($matchedLocale !== null) {
+                $redirectUrl = $hostInfo . self::pathOf($availableLocales[$matchedLocale]);
+            } elseif (isset($config['fallback'])) {
+                $redirectUrl = $config['fallback'];
+            } else {
+                $redirectUrl = $hostInfo . self::pathOf($primarySiteBaseUrl);
+            }
         } else {
-            $redirectUrl = rtrim($currentSiteBaseUrl, '/') . $path;
+            // Keep the visitor on the current host here too: the current site's
+            // base URL contributes only the locale path prefix, not its host.
+            $redirectUrl = $hostInfo . rtrim(self::pathOf($currentSiteBaseUrl), '/') . $path;
         }
 
         // Normalize the current URL before comparing it to the redirect target,
@@ -58,5 +75,15 @@ class RedirectResolver
         }
 
         return new RedirectDecision($redirectUrl, $isLocaleMatch ? 302 : 301, $isLocaleMatch);
+    }
+
+    /**
+     * Extract the path component of a URL, defaulting to '/'.
+     */
+    private static function pathOf(string $url): string
+    {
+        $path = parse_url($url, PHP_URL_PATH);
+
+        return ($path === null || $path === '') ? '/' : $path;
     }
 }
