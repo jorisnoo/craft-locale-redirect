@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/v1.1.0) (2026-07-16)
+
+### Features
+
+- add crossHostRedirects option for host-aware locale redirects ([b5127ca](https://github.com/jorisnoo/craft-locale-redirect/commit/b5127ca12eb0549d78c35596d49b9a534b55771c))
+
+### Bug Fixes
+
+- preserve request host when redirecting to locale paths ([d828309](https://github.com/jorisnoo/craft-locale-redirect/commit/d828309f20744c177a1f5e53b6d22ba8d81786f0))
 ## [1.0.4](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/v1.0.4) (2026-07-08)
 
 ### Bug Fixes
