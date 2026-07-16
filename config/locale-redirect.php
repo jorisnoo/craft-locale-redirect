@@ -52,4 +52,18 @@ return [
 
     'fallback' => null,
 
+    /*
+    |--------------------------------------------------------------------------
+    | Cross-Host Redirects
+    |--------------------------------------------------------------------------
+    |
+    | By default, redirects stay on the host the request came in on and only
+    | use the locale path prefixes from the site base URLs. Enable this when
+    | your locales live on separate domains (e.g. example.de / example.fr) to
+    | redirect to the configured site base URLs verbatim, host included.
+    |
+    */
+
+    'crossHostRedirects' => false,
+
 ];

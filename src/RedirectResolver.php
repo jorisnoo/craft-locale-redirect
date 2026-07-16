@@ -5,8 +5,11 @@ namespace Noo\CraftLocaleRedirect;
 class RedirectResolver
 {
     /**
-     * @param  array<string, string>  $localeUrlMap  Locale code => base URL (unfiltered).
-     * @param  array<string, mixed>   $config        Plugin config (reads `fallback`, `only`, `exclude`).
+     * @param  array<string, string>  $localeUrlMap  Locale code => base URL (unfiltered). When a locale is
+     *                                               served under several hosts, the entry should carry the
+     *                                               current site's host (see Module::getLocaleUrlMap()).
+     * @param  array<string, mixed>   $config        Plugin config (reads `fallback`, `only`, `exclude`,
+     *                                               `crossHostRedirects`).
      */
     public function resolve(
         string $rawPath,
@@ -32,34 +35,58 @@ class RedirectResolver
 
         $isLocaleMatch = $path === '/';
 
+        // By default only the locale path prefix identifies a locale, and the
+        // visitor is kept on the host they arrived on -- the base URLs carry
+        // whatever host their site is registered under, which need not be the
+        // host the request came in on (an alias or staging domain, or another
+        // edition in a per-edition multisite). Setups that distinguish locales
+        // by host instead of path prefix opt out via `crossHostRedirects` and
+        // redirect to the configured site base URLs verbatim.
+        $crossHost = (bool) ($config['crossHostRedirects'] ?? false);
+
         if ($isLocaleMatch) {
             $availableLocales = LocaleFilter::filter($localeUrlMap, $config);
+            $currentHost = self::hostOf($currentSiteBaseUrl);
+
+            if (! $crossHost) {
+                // Only offer locales served under the current site's host: a
+                // locale that only exists under another host would point to a
+                // page that does not exist here. The unfiltered map still
+                // drives the prefix bail check above, where foreign prefixes
+                // are safe to honor.
+                $availableLocales = array_filter(
+                    $availableLocales,
+                    fn (string $url): bool => self::hostOf($url) === $currentHost,
+                );
+            }
+
             $matchedLocale = (new BrowserLocaleMatcher)->match(
                 array_keys($availableLocales),
                 $acceptLanguage,
             );
 
-            // The locale map and the primary base URL are built from the sites'
-            // configured base URLs, so they carry whatever host those sites are
-            // registered under -- which need not be the host the request came in
-            // on. Several sites can also share a locale path prefix across
-            // different hosts (e.g. a per-edition multisite where every edition
-            // has its own domain but the same `/de` and `/fr` prefixes), so the
-            // map's host is not a reliable redirect target at all. Only the path
-            // prefix identifies the locale; keep the visitor on the host they
-            // arrived on. An explicit `fallback` is an intentional override, so
-            // it is honored verbatim (it may deliberately point elsewhere).
+            // An explicit `fallback` is an intentional override, so it is
+            // honored verbatim (it may deliberately point elsewhere).
             if ($matchedLocale !== null) {
-                $redirectUrl = $hostInfo . self::pathOf($availableLocales[$matchedLocale]);
+                $redirectUrl = $crossHost
+                    ? $availableLocales[$matchedLocale]
+                    : $hostInfo . self::pathOf($availableLocales[$matchedLocale]);
             } elseif (isset($config['fallback'])) {
                 $redirectUrl = $config['fallback'];
-            } else {
+            } elseif ($crossHost) {
+                $redirectUrl = $primarySiteBaseUrl;
+            } elseif (self::hostOf($primarySiteBaseUrl) === $currentHost) {
                 $redirectUrl = $hostInfo . self::pathOf($primarySiteBaseUrl);
+            } else {
+                // The primary site lives on another host, so its locale prefix
+                // may not exist here; the current site is the one Craft
+                // resolved for this host and is always a valid target.
+                $redirectUrl = $hostInfo . self::pathOf($currentSiteBaseUrl);
             }
         } else {
-            // Keep the visitor on the current host here too: the current site's
-            // base URL contributes only the locale path prefix, not its host.
-            $redirectUrl = $hostInfo . rtrim(self::pathOf($currentSiteBaseUrl), '/') . $path;
+            $redirectUrl = $crossHost
+                ? rtrim($currentSiteBaseUrl, '/') . $path
+                : $hostInfo . rtrim(self::pathOf($currentSiteBaseUrl), '/') . $path;
         }
 
         // Normalize the current URL before comparing it to the redirect target,
@@ -84,6 +111,16 @@ class RedirectResolver
     {
         $path = parse_url($url, PHP_URL_PATH);
 
-        return ($path === null || $path === '') ? '/' : $path;
+        return is_string($path) && $path !== '' ? $path : '/';
+    }
+
+    /**
+     * Extract the lowercased host of a URL, or null when it has none.
+     */
+    private static function hostOf(string $url): ?string
+    {
+        $host = parse_url($url, PHP_URL_HOST);
+
+        return is_string($host) ? strtolower($host) : null;
     }
 }

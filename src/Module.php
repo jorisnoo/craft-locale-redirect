@@ -70,20 +70,49 @@ class Module extends BaseModule
         Craft::$app->end();
     }
 
-    /** @return array<string, string> */
+    /**
+     * Map each locale to a site base URL. When a locale is served under
+     * several hosts (e.g. a per-edition multisite), prefer the site on the
+     * current site's host: only that one is a valid redirect target for this
+     * request. Locales served solely under other hosts keep their foreign
+     * entry so the resolver still recognizes their path prefixes as canonical.
+     *
+     * @return array<string, string>
+     */
     private function getLocaleUrlMap(): array
     {
+        $currentHost = self::hostOf(Craft::$app->getSites()->getCurrentSite()->getBaseUrl());
+
         $map = [];
+        $onCurrentHost = [];
 
         foreach (Craft::$app->getSites()->getAllSites() as $site) {
             $locale = strtolower(substr($site->language, 0, 2));
+            $baseUrl = $site->getBaseUrl();
 
-            if (! isset($map[$locale])) {
-                $map[$locale] = $site->getBaseUrl();
+            if ($baseUrl === null) {
+                continue;
+            }
+
+            $isCurrentHost = self::hostOf($baseUrl) === $currentHost;
+
+            if (! isset($map[$locale]) || ($isCurrentHost && ! $onCurrentHost[$locale])) {
+                $map[$locale] = $baseUrl;
+                $onCurrentHost[$locale] = $isCurrentHost;
             }
         }
 
         return $map;
+    }
+
+    /**
+     * Extract the lowercased host of a URL, or null when it has none.
+     */
+    private static function hostOf(?string $url): ?string
+    {
+        $host = $url === null ? null : parse_url($url, PHP_URL_HOST);
+
+        return is_string($host) ? strtolower($host) : null;
     }
 
 }

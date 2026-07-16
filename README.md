@@ -42,7 +42,9 @@ When a visitor hits your site's root URL (`/`), the module:
 3. Finds the best match between browser preferences and available locales
 4. Issues a `302` redirect to the matched locale's home URL
 
-If no match is found, the visitor is redirected to the primary site's URL (or a configured fallback). Query parameters are preserved through the redirect.
+If no match is found, the visitor is redirected to the primary site's locale prefix (or a configured fallback). Query parameters are preserved through the redirect.
+
+Redirects always stay on the host the request came in on — only the locale path prefix is taken from the site base URLs. In a multi-domain setup, only locales served under the current site's host are considered as redirect targets; when the primary site lives on another host, the fallback uses the current site's prefix instead.
 
 ## Configuration
 
@@ -56,6 +58,7 @@ return [
     'exclude' => [],
     'only' => [],
     'fallback' => null,
+    'crossHostRedirects' => false,
 ];
 ```
 
@@ -90,6 +93,16 @@ The URL to redirect to when no browser locale matches. Defaults to the primary s
 ```php
 'fallback' => '/en',
 ```
+
+### Cross-Host Redirects
+
+By default, redirects stay on the host the request came in on and only use the locale path prefixes from your site base URLs. If your locales live on separate domains instead (e.g. `example.de` and `example.fr`), enable cross-host redirects so the module targets the configured site base URLs verbatim, host included:
+
+```php
+'crossHostRedirects' => true,
+```
+
+Note that with this enabled, requests arriving on an alias or staging domain are redirected to the sites' registered domains.
 
 ## Branching and Versioning
 

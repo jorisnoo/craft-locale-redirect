@@ -288,11 +288,11 @@ it('keeps the visitor on an alias host when canonicalizing an unprefixed path', 
     expect($decision->statusCode)->toBe(301);
 });
 
-it('stays on the current host when the locale map is registered under another host', function () {
-    // Per-edition multisite: every edition lives on its own domain but shares
-    // the same locale path prefixes, so the locale map collapses onto whichever
-    // edition's host happens to come first. The root redirect must still keep
-    // the visitor on the host they arrived on, using only the matched prefix.
+it('redirects root to a locale on the current host in a per-edition multisite', function () {
+    // Per-edition multisite: every edition lives on its own domain with its
+    // own de/fr sites. The module builds the map host-aware, so it carries the
+    // current edition's entries; the redirect uses the matched prefix on the
+    // host the visitor arrived on, regardless of where the primary site lives.
     $decision = resolve([
         'rawPath' => '/',
         'hostInfo' => 'http://edition24.test',
@@ -301,13 +301,163 @@ it('stays on the current host when the locale map is registered under another ho
         'primarySiteBaseUrl' => 'http://primary.test/de/',
         'acceptLanguage' => 'fr-CH,fr;q=0.9',
         'localeUrlMap' => [
-            'de' => 'http://edition22.test/de/',
-            'fr' => 'http://edition22.test/fr/',
+            'de' => 'http://edition24.test/de/',
+            'fr' => 'http://edition24.test/fr/',
         ],
     ]);
 
     expect($decision->url)->toBe('http://edition24.test/fr/');
     expect($decision->statusCode)->toBe(302);
+});
+
+it('does not offer a locale served only under another host', function () {
+    // `en` exists only on another edition's domain; redirecting to /en/ on
+    // this host would land on a page that does not exist. Fall back instead.
+    $decision = resolve([
+        'rawPath' => '/',
+        'hostInfo' => 'http://edition24.test',
+        'currentAbsoluteUrl' => 'http://edition24.test/',
+        'currentSiteBaseUrl' => 'http://edition24.test/de/',
+        'primarySiteBaseUrl' => 'http://edition24.test/de/',
+        'acceptLanguage' => 'en',
+        'localeUrlMap' => [
+            'de' => 'http://edition24.test/de/',
+            'en' => 'http://edition22.test/en/',
+        ],
+    ]);
+
+    expect($decision->url)->toBe('http://edition24.test/de/');
+});
+
+it('falls back to the current site path when the primary site lives on another host', function () {
+    // No Accept-Language match and the primary site is another edition, whose
+    // locale prefix may not exist on this host. The current site is the one
+    // Craft resolved for this host, so its prefix is always a valid target.
+    $decision = resolve([
+        'rawPath' => '/',
+        'hostInfo' => 'http://edition24.test',
+        'currentAbsoluteUrl' => 'http://edition24.test/',
+        'currentSiteBaseUrl' => 'http://edition24.test/fr/',
+        'primarySiteBaseUrl' => 'http://primary.test/de/',
+        'acceptLanguage' => 'ja',
+        'localeUrlMap' => [
+            'fr' => 'http://edition24.test/fr/',
+            'de' => 'http://primary.test/de/',
+        ],
+    ]);
+
+    expect($decision->url)->toBe('http://edition24.test/fr/');
+    expect($decision->statusCode)->toBe(302);
+});
+
+it('still bails on a locale prefix served only under another host', function () {
+    // The bail check uses the unfiltered map: /en/... is canonical for some
+    // edition, so it must not be rewritten under this edition's prefix.
+    expect(resolve([
+        'rawPath' => '/en/about',
+        'hostInfo' => 'http://edition24.test',
+        'currentAbsoluteUrl' => 'http://edition24.test/en/about',
+        'currentSiteBaseUrl' => 'http://edition24.test/de/',
+        'localeUrlMap' => [
+            'de' => 'http://edition24.test/de/',
+            'en' => 'http://edition22.test/en/',
+        ],
+    ]))->toBeNull();
+});
+
+it('redirects root across hosts when crossHostRedirects is enabled', function () {
+    // Host-based locale setup: each locale lives on its own domain with no
+    // path prefix. Opting in restores redirects to the site URLs verbatim.
+    $decision = resolve([
+        'rawPath' => '/',
+        'hostInfo' => 'http://de.example.test',
+        'currentAbsoluteUrl' => 'http://de.example.test/',
+        'currentSiteBaseUrl' => 'http://de.example.test/',
+        'primarySiteBaseUrl' => 'http://de.example.test/',
+        'acceptLanguage' => 'en',
+        'localeUrlMap' => [
+            'de' => 'http://de.example.test/',
+            'en' => 'http://en.example.test/',
+        ],
+        'config' => ['crossHostRedirects' => true],
+    ]);
+
+    expect($decision->url)->toBe('http://en.example.test/');
+    expect($decision->statusCode)->toBe(302);
+    expect($decision->varyByLocale)->toBeTrue();
+});
+
+it('returns null in cross-host mode when the matched locale is the current host (loop prevention)', function () {
+    $decision = resolve([
+        'rawPath' => '/',
+        'hostInfo' => 'http://de.example.test',
+        'currentAbsoluteUrl' => 'http://de.example.test/',
+        'currentSiteBaseUrl' => 'http://de.example.test/',
+        'primarySiteBaseUrl' => 'http://de.example.test/',
+        'acceptLanguage' => 'de',
+        'localeUrlMap' => [
+            'de' => 'http://de.example.test/',
+            'en' => 'http://en.example.test/',
+        ],
+        'config' => ['crossHostRedirects' => true],
+    ]);
+
+    expect($decision)->toBeNull();
+});
+
+it('falls back to the primary site URL verbatim in cross-host mode', function () {
+    $decision = resolve([
+        'rawPath' => '/',
+        'hostInfo' => 'http://de.example.test',
+        'currentAbsoluteUrl' => 'http://de.example.test/',
+        'currentSiteBaseUrl' => 'http://de.example.test/',
+        'primarySiteBaseUrl' => 'http://en.example.test/',
+        'acceptLanguage' => 'ja',
+        'localeUrlMap' => [
+            'de' => 'http://de.example.test/',
+            'en' => 'http://en.example.test/',
+        ],
+        'config' => ['crossHostRedirects' => true],
+    ]);
+
+    expect($decision->url)->toBe('http://en.example.test/');
+});
+
+it('does not rewrite content paths in cross-host mode (loop prevention)', function () {
+    // With no path prefix on the current site, an unprefixed path is already
+    // canonical: the target equals the current URL, so nothing happens.
+    $decision = resolve([
+        'rawPath' => '/news/foo',
+        'hostInfo' => 'http://de.example.test',
+        'currentAbsoluteUrl' => 'http://de.example.test/news/foo',
+        'currentSiteBaseUrl' => 'http://de.example.test/',
+        'localeUrlMap' => [
+            'de' => 'http://de.example.test/',
+            'en' => 'http://en.example.test/',
+        ],
+        'config' => ['crossHostRedirects' => true],
+    ]);
+
+    expect($decision)->toBeNull();
+});
+
+it('redirects to the site base URL verbatim in cross-host mode with prefixed sites', function () {
+    // Mixed setup: locales differ by host and by path prefix. The unprefixed
+    // path is canonicalized onto the current site's own base URL.
+    $decision = resolve([
+        'rawPath' => '/news/foo',
+        'hostInfo' => 'http://example.de',
+        'currentAbsoluteUrl' => 'http://example.de/news/foo',
+        'currentSiteBaseUrl' => 'http://example.de/de/',
+        'localeUrlMap' => [
+            'de' => 'http://example.de/de/',
+            'fr' => 'http://example.fr/fr/',
+        ],
+        'config' => ['crossHostRedirects' => true],
+    ]);
+
+    expect($decision->url)->toBe('http://example.de/de/news/foo');
+    expect($decision->statusCode)->toBe(301);
 });
 
 it('preserves the host info when canonicalizing case', function () {
