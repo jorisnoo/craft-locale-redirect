@@ -102,7 +102,7 @@ By default, redirects stay on the host the request came in on and only use the l
 'crossHostRedirects' => true,
 ```
 
-Note that with this enabled, requests arriving on an alias or staging domain are redirected to the sites' registered domains.
+Note that with this enabled, requests arriving on an alias or staging domain are redirected to the sites' registered domains. When two sites share the same two-letter language on different hosts, a visitor already on one of those hosts stays there; otherwise the first-defined site wins.
 
 ## Branching and Versioning
 

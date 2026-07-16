@@ -5,11 +5,10 @@ namespace Noo\CraftLocaleRedirect;
 class RedirectResolver
 {
     /**
-     * @param  array<string, string>  $localeUrlMap  Locale code => base URL (unfiltered). When a locale is
-     *                                               served under several hosts, the entry should carry the
-     *                                               current site's host (see Module::getLocaleUrlMap()).
-     * @param  array<string, mixed>   $config        Plugin config (reads `fallback`, `only`, `exclude`,
-     *                                               `crossHostRedirects`).
+     * @param  array<string, list<string>>  $localeUrlMap  Locale code => base URLs of all sites using that
+     *                                                     locale, in site order (unfiltered).
+     * @param  array<string, mixed>         $config        Plugin config (reads `fallback`, `only`, `exclude`,
+     *                                                     `crossHostRedirects`).
      */
     public function resolve(
         string $rawPath,
@@ -23,13 +22,15 @@ class RedirectResolver
     ): ?RedirectDecision {
         $path = strtolower($rawPath);
 
-        foreach ($localeUrlMap as $url) {
-            $prefix = strtolower(rtrim(parse_url($url, PHP_URL_PATH) ?? '', '/'));
-            if ($prefix !== '' && ($path === $prefix || str_starts_with($path, $prefix . '/'))) {
-                if ($path === $rawPath) {
-                    return null;
+        foreach ($localeUrlMap as $urls) {
+            foreach ($urls as $url) {
+                $prefix = strtolower(rtrim(self::pathOf($url), '/'));
+                if ($prefix !== '' && ($path === $prefix || str_starts_with($path, $prefix . '/'))) {
+                    if ($path === $rawPath) {
+                        return null;
+                    }
+                    return new RedirectDecision($hostInfo . $path, 301, false);
                 }
-                return new RedirectDecision($hostInfo . $path, 301, false);
             }
         }
 
@@ -43,21 +44,35 @@ class RedirectResolver
         // by host instead of path prefix opt out via `crossHostRedirects` and
         // redirect to the configured site base URLs verbatim.
         $crossHost = (bool) ($config['crossHostRedirects'] ?? false);
+        $currentHost = self::hostOf($currentSiteBaseUrl);
+
+        // Project a base URL onto the request host: only its locale path
+        // prefix is kept, so the visitor stays where they arrived. In
+        // cross-host mode the base URL itself is the target, verbatim.
+        $toRequestHost = fn (string $url): string => $crossHost
+            ? $url
+            : self::schemeAwareHostInfo($hostInfo, $url) . self::pathOf($url);
 
         if ($isLocaleMatch) {
-            $availableLocales = LocaleFilter::filter($localeUrlMap, $config);
-            $currentHost = self::hostOf($currentSiteBaseUrl);
+            // Pick each locale's redirect target from the sites that use it:
+            // the first one on the current site's host, if any. Locales served
+            // only under other hosts are not offered in default mode -- the
+            // redirect stays on the request host, where their prefix would
+            // point to a page that does not exist. In cross-host mode they
+            // stay available through their own base URL.
+            $availableLocales = [];
 
-            if (! $crossHost) {
-                // Only offer locales served under the current site's host: a
-                // locale that only exists under another host would point to a
-                // page that does not exist here. The unfiltered map still
-                // drives the prefix bail check above, where foreign prefixes
-                // are safe to honor.
-                $availableLocales = array_filter(
-                    $availableLocales,
-                    fn (string $url): bool => self::hostOf($url) === $currentHost,
-                );
+            foreach (LocaleFilter::filter($localeUrlMap, $config) as $locale => $urls) {
+                foreach ($urls as $url) {
+                    if (self::isOnHost($url, $currentHost)) {
+                        $availableLocales[$locale] = $url;
+                        break;
+                    }
+                }
+
+                if ($crossHost && $urls !== [] && ! isset($availableLocales[$locale])) {
+                    $availableLocales[$locale] = $urls[0];
+                }
             }
 
             $matchedLocale = (new BrowserLocaleMatcher)->match(
@@ -68,25 +83,19 @@ class RedirectResolver
             // An explicit `fallback` is an intentional override, so it is
             // honored verbatim (it may deliberately point elsewhere).
             if ($matchedLocale !== null) {
-                $redirectUrl = $crossHost
-                    ? $availableLocales[$matchedLocale]
-                    : $hostInfo . self::pathOf($availableLocales[$matchedLocale]);
+                $redirectUrl = $toRequestHost($availableLocales[$matchedLocale]);
             } elseif (isset($config['fallback'])) {
                 $redirectUrl = $config['fallback'];
-            } elseif ($crossHost) {
-                $redirectUrl = $primarySiteBaseUrl;
-            } elseif (self::hostOf($primarySiteBaseUrl) === $currentHost) {
-                $redirectUrl = $hostInfo . self::pathOf($primarySiteBaseUrl);
+            } elseif ($crossHost || self::isOnHost($primarySiteBaseUrl, $currentHost)) {
+                $redirectUrl = $toRequestHost($primarySiteBaseUrl);
             } else {
                 // The primary site lives on another host, so its locale prefix
                 // may not exist here; the current site is the one Craft
                 // resolved for this host and is always a valid target.
-                $redirectUrl = $hostInfo . self::pathOf($currentSiteBaseUrl);
+                $redirectUrl = $toRequestHost($currentSiteBaseUrl);
             }
         } else {
-            $redirectUrl = $crossHost
-                ? rtrim($currentSiteBaseUrl, '/') . $path
-                : $hostInfo . rtrim(self::pathOf($currentSiteBaseUrl), '/') . $path;
+            $redirectUrl = rtrim($toRequestHost($currentSiteBaseUrl), '/') . $path;
         }
 
         // Normalize the current URL before comparing it to the redirect target,
@@ -115,12 +124,52 @@ class RedirectResolver
     }
 
     /**
-     * Extract the lowercased host of a URL, or null when it has none.
+     * Extract the lowercased host (with port, if any) of a URL, or null
+     * when it has none. The port is significant: sites differing only by
+     * port serve different content.
      */
     private static function hostOf(string $url): ?string
     {
         $host = parse_url($url, PHP_URL_HOST);
 
-        return is_string($host) ? strtolower($host) : null;
+        if (! is_string($host)) {
+            return null;
+        }
+
+        $port = parse_url($url, PHP_URL_PORT);
+
+        return strtolower($host) . ($port === null ? '' : ':' . $port);
+    }
+
+    /**
+     * Whether a base URL is served under the given host. A URL without a
+     * host of its own (a relative base URL) is served on whatever host the
+     * request hits, so it always counts as on-host.
+     */
+    private static function isOnHost(string $url, ?string $host): bool
+    {
+        $urlHost = self::hostOf($url);
+
+        return $urlHost === null || $urlHost === $host;
+    }
+
+    /**
+     * The host info to build a same-host redirect from. When the request
+     * arrived over http but the target site is registered as https on the
+     * same host, upgrade the scheme -- never the reverse, and never for
+     * other hosts (an alias or staging domain keeps the scheme it is
+     * actually served on).
+     */
+    private static function schemeAwareHostInfo(string $hostInfo, string $url): string
+    {
+        if (
+            str_starts_with($hostInfo, 'http://')
+            && str_starts_with(strtolower($url), 'https://')
+            && self::hostOf($url) === self::hostOf($hostInfo)
+        ) {
+            return 'https://' . substr($hostInfo, strlen('http://'));
+        }
+
+        return $hostInfo;
     }
 }
