@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.1](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/v1.1.1) (2026-07-16)
+
+### Code Refactoring
+
+- support multiple sites per locale with improved host-aware redirect logic ([aa1fda6](https://github.com/jorisnoo/craft-locale-redirect/commit/aa1fda6a2d65a7d963e5471590c4c67081c45aa5))
 ## [1.1.0](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/v1.1.0) (2026-07-16)
 
 ### Features
