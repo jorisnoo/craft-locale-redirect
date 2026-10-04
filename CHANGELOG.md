@@ -2,12 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
-## [1.1.1](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/v1.1.1) (2026-07-16)
+## [1.1.1](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/1.1.1) (2026-07-16)
 
 ### Code Refactoring
 
 - support multiple sites per locale with improved host-aware redirect logic ([aa1fda6](https://github.com/jorisnoo/craft-locale-redirect/commit/aa1fda6a2d65a7d963e5471590c4c67081c45aa5))
-## [1.1.0](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/v1.1.0) (2026-07-16)
+## [1.1.0](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/1.1.0) (2026-07-16)
 
 ### Features
 
@@ -16,12 +16,12 @@ All notable changes to this project will be documented in this file.
 ### Bug Fixes
 
 - preserve request host when redirecting to locale paths ([d828309](https://github.com/jorisnoo/craft-locale-redirect/commit/d828309f20744c177a1f5e53b6d22ba8d81786f0))
-## [1.0.4](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/v1.0.4) (2026-07-08)
+## [1.0.4](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/1.0.4) (2026-07-08)
 
 ### Bug Fixes
 
 - decode percent-encoded URLs in redirect loop check ([937a8f6](https://github.com/jorisnoo/craft-locale-redirect/commit/937a8f6c2a1afc435f24b4bb15cb8bce7307d7fd))
-## [1.0.3](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/v1.0.3) (2026-07-08)
+## [1.0.3](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/1.0.3) (2026-07-08)
 
 ### Bug Fixes
 
@@ -31,7 +31,7 @@ All notable changes to this project will be documented in this file.
 
 - add justfile ([5df0204](https://github.com/jorisnoo/craft-locale-redirect/commit/5df0204507b10f6bcab83ebea514a67c7997bd56))
 - **deps:** bump actions/checkout from 6 to 7 ([5b07905](https://github.com/jorisnoo/craft-locale-redirect/commit/5b07905886252f743e3328808fb7ed114e823248))
-## [1.0.2](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/v1.0.2) (2026-05-13)
+## [1.0.2](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/1.0.2) (2026-05-13)
 
 ### Bug Fixes
 
@@ -41,12 +41,12 @@ All notable changes to this project will be documented in this file.
 ### Code Refactoring
 
 - extract redirect resolution logic into testable RedirectResolver class ([99775c8](https://github.com/jorisnoo/craft-locale-redirect/commit/99775c8268c3480eebf9100a9b7272dda21d5de7))
-## [1.0.1](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/v1.0.1) (2026-05-13)
+## [1.0.1](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/1.0.1) (2026-05-13)
 
 ### Code Refactoring
 
 - improve locale redirect with path-aware handling ([de455b3](https://github.com/jorisnoo/craft-locale-redirect/commit/de455b3c5e613bf1586e2db620b29d946953ddcf))
-## [1.0.0](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/v1.0.0) (2026-05-12)
+## [1.0.0](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/1.0.0) (2026-05-12)
 
 ### ⚠ BREAKING CHANGES
 

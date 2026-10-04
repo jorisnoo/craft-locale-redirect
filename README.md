@@ -111,3 +111,7 @@ This package follows [Semantic Versioning](https://semver.org/). Only Craft 5 is
 ## License
 
 The MIT License (MIT). Please see [LICENSE](LICENSE) for more information.
+
+## Maintainer releases
+
+See [RELEASING.md](RELEASING.md) for versioning, changelog entries and the release command.
