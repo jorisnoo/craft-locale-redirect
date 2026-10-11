@@ -42,3 +42,8 @@ it('matches the first available locale when quality is equal', function () {
 it('handles whitespace in the header', function () {
     expect($this->matcher->match(['en', 'de'], ' de-AT , en ; q=0.5 '))->toBe('de');
 });
+
+it('ignores locales with q=0', function () {
+    expect($this->matcher->match(['en', 'de'], 'de;q=0,en;q=0.5'))->toBe('en');
+    expect($this->matcher->match(['de'], 'de;q=0.0'))->toBeNull();
+});

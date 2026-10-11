@@ -20,21 +20,26 @@ class RedirectResolver
         array $localeUrlMap,
         array $config = [],
     ): ?RedirectDecision {
-        $path = strtolower($rawPath);
+        // Locale prefixes are matched case-insensitively, but only the prefix
+        // itself is canonicalized: the rest of the path keeps its case, as
+        // routes and slugs below it may be case-sensitive and a 301 sticks.
+        $lowerPath = strtolower($rawPath);
 
         foreach ($localeUrlMap as $urls) {
             foreach ($urls as $url) {
-                $prefix = strtolower(rtrim(self::pathOf($url), '/'));
-                if ($prefix !== '' && ($path === $prefix || str_starts_with($path, $prefix . '/'))) {
-                    if ($path === $rawPath) {
+                $prefix = rtrim(self::pathOf($url), '/');
+                $lowerPrefix = strtolower($prefix);
+                if ($prefix !== '' && ($lowerPath === $lowerPrefix || str_starts_with($lowerPath, $lowerPrefix . '/'))) {
+                    $canonicalPath = $prefix . substr($rawPath, strlen($prefix));
+                    if ($canonicalPath === $rawPath) {
                         return null;
                     }
-                    return new RedirectDecision($hostInfo . $path, 301, false);
+                    return new RedirectDecision($hostInfo . self::encodePath($canonicalPath), 301, false);
                 }
             }
         }
 
-        $isLocaleMatch = $path === '/';
+        $isLocaleMatch = $rawPath === '/';
 
         // By default only the locale path prefix identifies a locale, and the
         // visitor is kept on the host they arrived on -- the base URLs carry
@@ -95,22 +100,31 @@ class RedirectResolver
                 $redirectUrl = $toRequestHost($currentSiteBaseUrl);
             }
         } else {
-            $redirectUrl = rtrim($toRequestHost($currentSiteBaseUrl), '/') . $path;
+            $redirectUrl = rtrim($toRequestHost($currentSiteBaseUrl), '/') . self::encodePath($rawPath);
         }
 
-        // Normalize the current URL before comparing it to the redirect target,
-        // which is built from the decoded path ($rawPath comes from a urldecoded
-        // getPathInfo()). getAbsoluteUrl() keeps the client's percent-encoding
-        // and its query string, so without stripping the query and decoding the
-        // path a request that is already canonical (e.g. ?vd-scan=1, or an
-        // umlaut slug like /m%C3%BCnchen) slips past this guard and loops forever.
+        // Compare decoded forms: getAbsoluteUrl() keeps the client's own
+        // percent-encoding (which may differ from ours) and its query string,
+        // so without stripping the query and decoding both sides a request
+        // that is already canonical (e.g. ?vd-scan=1, or an umlaut slug like
+        // /m%C3%BCnchen) slips past this guard and loops forever.
         $currentUrlNormalized = rawurldecode(strtok($currentAbsoluteUrl, '?'));
 
-        if (rtrim($redirectUrl, '/') === rtrim($currentUrlNormalized, '/')) {
+        if (rtrim(rawurldecode($redirectUrl), '/') === rtrim($currentUrlNormalized, '/')) {
             return null;
         }
 
         return new RedirectDecision($redirectUrl, $isLocaleMatch ? 302 : 301, $isLocaleMatch);
+    }
+
+    /**
+     * Percent-encode a decoded path segment by segment, so characters such
+     * as `?` or `#` that were encoded in the request stay part of the path
+     * in the Location header.
+     */
+    private static function encodePath(string $path): string
+    {
+        return implode('/', array_map(rawurlencode(...), explode('/', $path)));
     }
 
     /**

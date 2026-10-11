@@ -39,10 +39,12 @@ it('canonicalizes uppercase locale prefix to lowercase with 301', function () {
     expect($decision->varyByLocale)->toBeFalse();
 });
 
-it('canonicalizes mixed case in path below the locale prefix to lowercase', function () {
-    $decision = resolve(['rawPath' => '/de/News/Foo']);
+it('keeps the case of the path below the locale prefix', function () {
+    expect(resolve(['rawPath' => '/de/News/Foo']))->toBeNull();
 
-    expect($decision->url)->toBe('http://example.test/de/news/foo');
+    $decision = resolve(['rawPath' => '/DE/News/Foo']);
+
+    expect($decision->url)->toBe('http://example.test/de/News/Foo');
     expect($decision->statusCode)->toBe(301);
 });
 
@@ -84,7 +86,7 @@ it('honors a configured fallback URL when no Accept-Language matches', function 
     expect($decision->url)->toBe('http://example.test/en/');
 });
 
-it('redirects an unprefixed path to the current site base URL with the lowercased path', function () {
+it('redirects an unprefixed path to the current site base URL', function () {
     $decision = resolve([
         'rawPath' => '/news/foo',
         'currentAbsoluteUrl' => 'http://example.test/news/foo',
@@ -95,14 +97,41 @@ it('redirects an unprefixed path to the current site base URL with the lowercase
     expect($decision->varyByLocale)->toBeFalse();
 });
 
-it('lowercases mixed-case unprefixed paths and 301s in a single hop', function () {
+it('keeps the case of mixed-case unprefixed paths', function () {
     $decision = resolve([
         'rawPath' => '/News/Foo',
         'currentAbsoluteUrl' => 'http://example.test/News/Foo',
     ]);
 
-    expect($decision->url)->toBe('http://example.test/de/news/foo');
+    expect($decision->url)->toBe('http://example.test/de/News/Foo');
     expect($decision->statusCode)->toBe(301);
+});
+
+it('re-encodes decoded path characters in the redirect URL', function () {
+    $decision = resolve([
+        'rawPath' => '/foo?x#y',
+        'currentAbsoluteUrl' => 'http://example.test/foo%3Fx%23y',
+    ]);
+
+    expect($decision->url)->toBe('http://example.test/de/foo%3Fx%23y');
+});
+
+it('re-encodes non-ASCII path characters in the redirect URL', function () {
+    $decision = resolve([
+        'rawPath' => '/münchen',
+        'currentAbsoluteUrl' => 'http://example.test/m%C3%BCnchen',
+    ]);
+
+    expect($decision->url)->toBe('http://example.test/de/m%C3%BCnchen');
+});
+
+it('re-encodes the path when canonicalizing the locale prefix', function () {
+    $decision = resolve([
+        'rawPath' => '/DE/foo?x',
+        'currentAbsoluteUrl' => 'http://example.test/DE/foo%3Fx',
+    ]);
+
+    expect($decision->url)->toBe('http://example.test/de/foo%3Fx');
 });
 
 it('preserves trailing slash on unprefixed redirects', function () {

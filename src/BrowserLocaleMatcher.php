@@ -47,6 +47,11 @@ class BrowserLocaleMatcher
                 }
             }
 
+            // q=0 means "not acceptable" (RFC 9110 12.4.2).
+            if ($quality <= 0) {
+                continue;
+            }
+
             $entries[] = ['locale' => $locale, 'quality' => $quality];
         }
 
