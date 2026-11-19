@@ -41,7 +41,8 @@ class RedirectResolver
         $isLocaleMatch = $path === '/';
         if (!$isLocaleMatch && (!($config['canonicalizePaths'] ?? true)
             || preg_match(self::CRAWLER_FILE_PATTERN, $path)
-            || $path === '/favicon.ico' || str_starts_with($path . '/', '/.well-known/'))) {
+            || $path === '/favicon.ico' || str_starts_with($path . '/', '/.well-known/')
+            || $path === '/dist' || str_starts_with($path, '/dist/'))) {
             return null;
         }
         foreach ($config['excludePaths'] ?? [] as $excluded) {
