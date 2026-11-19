@@ -19,4 +19,5 @@ test-coverage:
     vendor/bin/pest --coverage
 
 # Run all checks
-check: test
+check:
+    composer check

@@ -42,11 +42,15 @@ When a visitor hits your site's root URL (`/`), the module:
 3. Finds the best match between browser preferences and available locales
 4. Issues a `302` redirect to the matched locale's home URL
 
-If no match is found, the visitor is redirected to the primary site's locale prefix (or a configured fallback). Query parameters are preserved through the redirect.
+If no browser language matches, the module uses `fallback` or the primary site's URL (the current site's URL when the primary site is on another domain). Query parameters are preserved, except for Craft's routing parameter, normally `p`.
 
-Redirects always stay on the host the request came in on — only the locale path prefix is taken from the site base URLs. In a multi-domain setup, only locales served under the current site's host are considered as redirect targets; when the primary site lives on another host, the fallback uses the current site's prefix instead.
+On other site GETs the module also issues **permanent (301) redirects**: `/News/Foo` becomes `/de/News/Foo` if the current site lives at `/de/`, and `/DE/News/Foo` becomes `/de/News/Foo`. Only the configured prefix is canonicalized; case, encoded characters and trailing slashes below it are preserved. Set `canonicalizePaths` to `false` to negotiate the root only.
 
-`robots.txt` and XML sitemaps (`sitemap.xml`, `sitemap-*.xml`) are never redirected or lowercased, at the root or under a locale prefix, so crawlers find them where they are declared.
+Crawler files (`robots.txt`, `sitemap.xml`, `sitemap-*.xml`), `/.well-known/`, `/favicon.ico`, and Craft's CP resources are left alone. `excludePaths` adds mount-relative paths or entire subtrees (e.g. `['/api', '/status.txt']`). The module does not redirect console, control panel, action, preview, or explicit front-controller requests.
+
+Same-origin redirects use a path-only `Location`: aliases and staging domains stay on their own origin, and request host headers never supply the redirect authority. Enforce HTTPS at the web server or proxy. By default only locales available on the current site's configured host are offered; `crossHostRedirects` enables configured foreign domains.
+
+If a locale is served at the root, point its language-switcher link to `/?localeRedirect=off` (including the mount in a subdirectory install). `bypassParam` changes the parameter name; an empty string disables it. Root responses vary on `Accept-Language`, even when no redirect occurs. Exclude the root from static/full-page caches that bypass PHP; intermediary caches must respect `Vary` and the bypass query string.
 
 ## Configuration
 
@@ -61,6 +65,9 @@ return [
     'only' => [],
     'fallback' => null,
     'crossHostRedirects' => false,
+    'canonicalizePaths' => true,
+    'excludePaths' => [],
+    'bypassParam' => 'localeRedirect',
 ];
 ```
 
@@ -74,7 +81,7 @@ Prevent the redirect from triggering on specific sites (by handle). Useful when 
 
 ### Exclude Locales
 
-Prevent specific locales from being redirect targets:
+Prevent specific locales from being redirect targets. Filters use the primary language subtag: `de-CH` and `de_DE` both select `de`, while `fil` is distinct from `fi`.
 
 ```php
 'exclude' => ['de', 'it'],
@@ -90,7 +97,7 @@ Only allow redirection to specific locales. Takes precedence over `exclude` when
 
 ### Fallback URL
 
-The URL to redirect to when no browser locale matches. Defaults to the primary site URL:
+The URL to redirect to when no browser locale matches. Use an absolute URL, an origin-relative path, or a path relative to the application's root. A fallback to the current page is ignored.
 
 ```php
 'fallback' => '/en',
@@ -104,7 +111,7 @@ By default, redirects stay on the host the request came in on and only use the l
 'crossHostRedirects' => true,
 ```
 
-Note that with this enabled, requests arriving on an alias or staging domain are redirected to the sites' registered domains. When two sites share the same two-letter language on different hosts, a visitor already on one of those hosts stays there; otherwise the first-defined site wins.
+With this enabled, a request on an alias or staging domain can redirect to a registered domain. Configure explicit trusted site base URLs (or environment variables), not a dynamic `@web` alias, for inter-domain redirects. When multiple sites share a primary language subtag, the site on the current configured host wins; otherwise the first-defined site wins.
 
 ## Branching and Versioning
 

@@ -2,6 +2,9 @@
 
 namespace Noo\CraftLocaleRedirect;
 
+use GuzzleHttp\Psr7\Uri;
+use GuzzleHttp\Psr7\UriResolver;
+
 class RedirectResolver
 {
     /**
@@ -15,65 +18,60 @@ class RedirectResolver
     /**
      * @param  array<string, list<string>>  $localeUrlMap  Locale code => base URLs of all sites using that
      *                                                     locale, in site order (unfiltered).
-     * @param  array<string, mixed>         $config        Plugin config (reads `fallback`, `only`, `exclude`,
-     *                                                     `crossHostRedirects`).
+     * @param  array<string, mixed>         $config
+     * @param  string                       $rawPath      Encoded request path, including any application mount.
      */
     public function resolve(
         string $rawPath,
         string $hostInfo,
-        string $currentAbsoluteUrl,
+        string $baseUrl,
         string $currentSiteBaseUrl,
         string $primarySiteBaseUrl,
         string $acceptLanguage,
         array $localeUrlMap,
         array $config = [],
     ): ?RedirectDecision {
-        if (preg_match(self::CRAWLER_FILE_PATTERN, $rawPath) === 1) {
+        $mount = rtrim($baseUrl, '/');
+        if (!str_starts_with($rawPath . '/', $mount . '/')
+            || str_starts_with($rawPath, '//') || str_contains($rawPath, '\\')
+            || preg_match('/[\x00-\x20\x7f?#]/', $rawPath)) {
             return null;
         }
-
-        $path = strtolower($rawPath);
-
-        foreach ($localeUrlMap as $urls) {
-            foreach ($urls as $url) {
-                $prefix = strtolower(rtrim(self::pathOf($url), '/'));
-                if ($prefix !== '' && ($path === $prefix || str_starts_with($path, $prefix . '/'))) {
-                    if ($path === $rawPath) {
-                        return null;
-                    }
-                    return new RedirectDecision($hostInfo . $path, 301, false);
-                }
+        $path = substr($rawPath, strlen($mount)) ?: '/';
+        $isLocaleMatch = $path === '/';
+        if (!$isLocaleMatch && (!($config['canonicalizePaths'] ?? true)
+            || preg_match(self::CRAWLER_FILE_PATTERN, $path)
+            || $path === '/favicon.ico' || str_starts_with($path . '/', '/.well-known/'))) {
+            return null;
+        }
+        foreach ($config['excludePaths'] ?? [] as $excluded) {
+            if (str_starts_with($path . '/', rtrim($excluded, '/') . '/')) {
+                return null;
             }
         }
 
-        $isLocaleMatch = $path === '/';
-
-        // By default only the locale path prefix identifies a locale, and the
-        // visitor is kept on the host they arrived on -- the base URLs carry
-        // whatever host their site is registered under, which need not be the
-        // host the request came in on (an alias or staging domain, or another
-        // edition in a per-edition multisite). Setups that distinguish locales
-        // by host instead of path prefix opt out via `crossHostRedirects` and
-        // redirect to the configured site base URLs verbatim.
+        // A relative Location retains the browser's origin without reflecting any
+        // request or forwarded host. Absolute targets are reserved for configured domains.
         $crossHost = (bool) ($config['crossHostRedirects'] ?? false);
         $currentHost = self::hostOf($currentSiteBaseUrl);
+        $target = static fn (string $url): string => $crossHost && !self::isOnHost($url, self::hostOf($hostInfo))
+            ? $url : self::pathOf($url);
 
-        // Project a base URL onto the request host: only its locale path
-        // prefix is kept, so the visitor stays where they arrived. In
-        // cross-host mode the base URL itself is the target, verbatim.
-        $toRequestHost = fn (string $url): string => $crossHost
-            ? $url
-            : self::schemeAwareHostInfo($hostInfo, $url) . self::pathOf($url);
-
-        if ($isLocaleMatch) {
-            // Pick each locale's redirect target from the sites that use it:
-            // the first one on the current site's host, if any. Locales served
-            // only under other hosts are not offered in default mode -- the
-            // redirect stays on the request host, where their prefix would
-            // point to a page that does not exist. In cross-host mode they
-            // stay available through their own base URL.
+        if (!$isLocaleMatch) {
+            $lowerPath = strtolower($rawPath);
+            foreach ($localeUrlMap as $urls) {
+                foreach ($urls as $url) {
+                    $prefix = rtrim(self::pathOf($url), '/');
+                    if ($prefix === '' || $prefix === $mount || !str_starts_with($lowerPath . '/', strtolower($prefix) . '/')) {
+                        continue;
+                    }
+                    $canonical = $prefix . substr($rawPath, strlen($prefix));
+                    return $canonical === $rawPath ? null : new RedirectDecision($canonical, 301, false);
+                }
+            }
+            $redirectUrl = rtrim($target($currentSiteBaseUrl), '/') . $path;
+        } else {
             $availableLocales = [];
-
             foreach (LocaleFilter::filter($localeUrlMap, $config) as $locale => $urls) {
                 foreach ($urls as $url) {
                     if (self::isOnHost($url, $currentHost)) {
@@ -81,44 +79,26 @@ class RedirectResolver
                         break;
                     }
                 }
-
-                if ($crossHost && $urls !== [] && ! isset($availableLocales[$locale])) {
+                if ($crossHost && $urls !== [] && !isset($availableLocales[$locale])) {
                     $availableLocales[$locale] = $urls[0];
                 }
             }
-
-            $matchedLocale = (new BrowserLocaleMatcher)->match(
-                array_keys($availableLocales),
-                $acceptLanguage,
-            );
-
-            // An explicit `fallback` is an intentional override, so it is
-            // honored verbatim (it may deliberately point elsewhere).
-            if ($matchedLocale !== null) {
-                $redirectUrl = $toRequestHost($availableLocales[$matchedLocale]);
+            $matched = (new BrowserLocaleMatcher)->match(array_keys($availableLocales), $acceptLanguage);
+            if ($matched !== null) {
+                $redirectUrl = $target($availableLocales[$matched]);
             } elseif (isset($config['fallback'])) {
-                $redirectUrl = $config['fallback'];
-            } elseif ($crossHost || self::isOnHost($primarySiteBaseUrl, $currentHost)) {
-                $redirectUrl = $toRequestHost($primarySiteBaseUrl);
+                $redirectUrl = (string) UriResolver::resolve(new Uri($mount . '/'), new Uri($config['fallback']));
             } else {
-                // The primary site lives on another host, so its locale prefix
-                // may not exist here; the current site is the one Craft
-                // resolved for this host and is always a valid target.
-                $redirectUrl = $toRequestHost($currentSiteBaseUrl);
+                $redirectUrl = $target($crossHost || self::isOnHost($primarySiteBaseUrl, $currentHost)
+                    ? $primarySiteBaseUrl : $currentSiteBaseUrl);
             }
-        } else {
-            $redirectUrl = rtrim($toRequestHost($currentSiteBaseUrl), '/') . $path;
         }
 
-        // Normalize the current URL before comparing it to the redirect target,
-        // which is built from the decoded path ($rawPath comes from a urldecoded
-        // getPathInfo()). getAbsoluteUrl() keeps the client's percent-encoding
-        // and its query string, so without stripping the query and decoding the
-        // path a request that is already canonical (e.g. ?vd-scan=1, or an
-        // umlaut slug like /m%C3%BCnchen) slips past this guard and loops forever.
-        $currentUrlNormalized = rawurldecode(strtok($currentAbsoluteUrl, '?'));
-
-        if (rtrim($redirectUrl, '/') === rtrim($currentUrlNormalized, '/')) {
+        // Scheme-only and query-only redirects cannot change the chosen route.
+        // In particular, the client may already be on HTTPS behind a TLS terminator.
+        if (str_starts_with($redirectUrl, '//') || str_contains($redirectUrl, '\\')
+            || (self::isOnHost($redirectUrl, self::hostOf($hostInfo))
+                && rtrim(self::pathOf($redirectUrl), '/') === rtrim($rawPath, '/'))) {
             return null;
         }
 
@@ -163,25 +143,5 @@ class RedirectResolver
         $urlHost = self::hostOf($url);
 
         return $urlHost === null || $urlHost === $host;
-    }
-
-    /**
-     * The host info to build a same-host redirect from. When the request
-     * arrived over http but the target site is registered as https on the
-     * same host, upgrade the scheme -- never the reverse, and never for
-     * other hosts (an alias or staging domain keeps the scheme it is
-     * actually served on).
-     */
-    private static function schemeAwareHostInfo(string $hostInfo, string $url): string
-    {
-        if (
-            str_starts_with($hostInfo, 'http://')
-            && str_starts_with(strtolower($url), 'https://')
-            && self::hostOf($url) === self::hostOf($hostInfo)
-        ) {
-            return 'https://' . substr($hostInfo, strlen('http://'));
-        }
-
-        return $hostInfo;
     }
 }

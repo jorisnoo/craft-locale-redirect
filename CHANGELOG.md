@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] - 2026-11-19
+
+### Changed
+
+- Canonical redirects now preserve case outside the locale prefix and use origin-relative locations for same-origin destinations. Configure HTTP-to-HTTPS redirects at your edge rather than relying on the module. Direct users of `RedirectResolver::resolve()` must pass an encoded request path including the mount and the request `baseUrl` instead of `currentAbsoluteUrl`.
+- Set `canonicalizePaths` to `false` for root-only negotiation, or exclude specific subtrees with `excludePaths`. Link to `/?localeRedirect=off` to explicitly select a root-level locale.
+
+### Fixed
+
+- Prevent repeated redirects on subdirectory installs, self-referential fallbacks and TLS-terminating proxies. Preserve encoded path data and repeated query parameters without forwarding Craft's rewrite parameter.
+- Leave CP resources, well-known paths, favicons and crawler files untouched. Mark redirects private and vary negotiated root pages as well as redirects by browser language.
+- Respect zero and case-insensitive language quality weights, three-letter languages, and regional locale filters.
+
 ## [1.1.2] - 2026-11-19
 
 ### Fixed

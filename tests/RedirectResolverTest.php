@@ -6,9 +6,11 @@ use Noo\CraftLocaleRedirect\RedirectResolver;
 function resolve(array $overrides = []): ?RedirectDecision
 {
     return (new RedirectResolver)->resolve(
-        rawPath: $overrides['rawPath'] ?? '/',
+        rawPath: isset($overrides['currentAbsoluteUrl'])
+            ? parse_url($overrides['currentAbsoluteUrl'], PHP_URL_PATH)
+            : ($overrides['rawPath'] ?? '/'),
         hostInfo: $overrides['hostInfo'] ?? 'http://example.test',
-        currentAbsoluteUrl: $overrides['currentAbsoluteUrl'] ?? 'http://example.test/',
+        baseUrl: $overrides['baseUrl'] ?? '',
         currentSiteBaseUrl: $overrides['currentSiteBaseUrl'] ?? 'http://example.test/de/',
         primarySiteBaseUrl: $overrides['primarySiteBaseUrl'] ?? 'http://example.test/de/',
         acceptLanguage: $overrides['acceptLanguage'] ?? '',
@@ -34,22 +36,19 @@ it('canonicalizes uppercase locale prefix to lowercase with 301', function () {
     $decision = resolve(['rawPath' => '/DE/news/foo']);
 
     expect($decision)->toBeInstanceOf(RedirectDecision::class);
-    expect($decision->url)->toBe('http://example.test/de/news/foo');
+    expect($decision->url)->toBe('/de/news/foo');
     expect($decision->statusCode)->toBe(301);
     expect($decision->varyByLocale)->toBeFalse();
 });
 
-it('canonicalizes mixed case in path below the locale prefix to lowercase', function () {
-    $decision = resolve(['rawPath' => '/de/News/Foo']);
-
-    expect($decision->url)->toBe('http://example.test/de/news/foo');
-    expect($decision->statusCode)->toBe(301);
+it('leaves mixed case below a canonical locale prefix alone', function () {
+    expect(resolve(['rawPath' => '/de/News/Foo']))->toBeNull();
 });
 
 it('preserves trailing slash when canonicalizing case', function () {
     $decision = resolve(['rawPath' => '/De/']);
 
-    expect($decision->url)->toBe('http://example.test/de/');
+    expect($decision->url)->toBe('/de/');
 });
 
 it('redirects root to the locale matching Accept-Language with 302 and varyByLocale', function () {
@@ -58,7 +57,7 @@ it('redirects root to the locale matching Accept-Language with 302 and varyByLoc
         'acceptLanguage' => 'de-CH,de;q=0.9,en;q=0.5',
     ]);
 
-    expect($decision->url)->toBe('http://example.test/de/');
+    expect($decision->url)->toBe('/de/');
     expect($decision->statusCode)->toBe(302);
     expect($decision->varyByLocale)->toBeTrue();
 });
@@ -70,7 +69,7 @@ it('redirects root to the primary base URL when no Accept-Language matches', fun
         'primarySiteBaseUrl' => 'http://example.test/de/',
     ]);
 
-    expect($decision->url)->toBe('http://example.test/de/');
+    expect($decision->url)->toBe('/de/');
 });
 
 it('honors a configured fallback URL when no Accept-Language matches', function () {
@@ -84,24 +83,24 @@ it('honors a configured fallback URL when no Accept-Language matches', function 
     expect($decision->url)->toBe('http://example.test/en/');
 });
 
-it('redirects an unprefixed path to the current site base URL with the lowercased path', function () {
+it('redirects an unprefixed path to the current site prefix', function () {
     $decision = resolve([
         'rawPath' => '/news/foo',
         'currentAbsoluteUrl' => 'http://example.test/news/foo',
     ]);
 
-    expect($decision->url)->toBe('http://example.test/de/news/foo');
+    expect($decision->url)->toBe('/de/news/foo');
     expect($decision->statusCode)->toBe(301);
     expect($decision->varyByLocale)->toBeFalse();
 });
 
-it('lowercases mixed-case unprefixed paths and 301s in a single hop', function () {
+it('preserves case in unprefixed paths and redirects in a single hop', function () {
     $decision = resolve([
         'rawPath' => '/News/Foo',
         'currentAbsoluteUrl' => 'http://example.test/News/Foo',
     ]);
 
-    expect($decision->url)->toBe('http://example.test/de/news/foo');
+    expect($decision->url)->toBe('/de/News/Foo');
     expect($decision->statusCode)->toBe(301);
 });
 
@@ -111,7 +110,7 @@ it('preserves trailing slash on unprefixed redirects', function () {
         'currentAbsoluteUrl' => 'http://example.test/news/foo/',
     ]);
 
-    expect($decision->url)->toBe('http://example.test/de/news/foo/');
+    expect($decision->url)->toBe('/de/news/foo/');
 });
 
 it('returns null when the computed redirect equals the current absolute URL (loop prevention)', function () {
@@ -158,15 +157,12 @@ it('still redirects to canonicalize an unprefixed path even when a query string 
         'currentSiteBaseUrl' => 'http://example.test/de/',
     ]);
 
-    expect($decision->url)->toBe('http://example.test/de/news/foo');
+    expect($decision->url)->toBe('/de/news/foo');
     expect($decision->statusCode)->toBe(301);
 });
 
 it('returns null when the current URL is percent-encoded but already canonical (loop prevention)', function () {
-    // getPathInfo() is urldecoded ("/münchen") while getAbsoluteUrl() stays
-    // percent-encoded ("/m%C3%BCnchen"). The guard must compare like for like.
     $decision = resolve([
-        'rawPath' => '/münchen',
         'currentAbsoluteUrl' => 'http://example.test/m%C3%BCnchen',
         'currentSiteBaseUrl' => 'http://example.test/',
         'localeUrlMap' => ['de' => ['http://example.test/']],
@@ -186,7 +182,7 @@ it('ignores sites with no URL path prefix when checking for a locale match', fun
         ],
     ]);
 
-    expect($decision->url)->toBe('http://example.test/de/some-path');
+    expect($decision->url)->toBe('/de/some-path');
 });
 
 it('uses the unfiltered locale map for the prefix bail check', function () {
@@ -207,7 +203,7 @@ it('uses the filtered locale map for Accept-Language matching at root', function
         'config' => ['exclude' => ['de']],
     ]);
 
-    expect($decision->url)->toBe('http://example.test/en/');
+    expect($decision->url)->toBe('/en/');
 });
 
 it('matches Accept-Language only against locales allowed by only filter', function () {
@@ -217,7 +213,7 @@ it('matches Accept-Language only against locales allowed by only filter', functi
         'config' => ['only' => ['en']],
     ]);
 
-    expect($decision->url)->toBe('http://example.test/en/');
+    expect($decision->url)->toBe('/en/');
 });
 
 it('falls back to the primary base URL when only filter excludes the Accept-Language match', function () {
@@ -228,7 +224,7 @@ it('falls back to the primary base URL when only filter excludes the Accept-Lang
         'config' => ['only' => ['en']],
     ]);
 
-    expect($decision->url)->toBe('http://example.test/de/');
+    expect($decision->url)->toBe('/de/');
 });
 
 it('still bails on a locale prefix even when only filter is active', function () {
@@ -247,7 +243,7 @@ it('matches locale prefix case-insensitively against canonical lowercase prefix'
         'currentAbsoluteUrl' => 'http://example.test/EN/about',
     ]);
 
-    expect($decision->url)->toBe('http://example.test/en/about');
+    expect($decision->url)->toBe('/en/about');
 });
 
 it('keeps the visitor on an alias host when redirecting root to a locale', function () {
@@ -260,7 +256,7 @@ it('keeps the visitor on an alias host when redirecting root to a locale', funct
         'acceptLanguage' => 'de-CH,de;q=0.9',
     ]);
 
-    expect($decision->url)->toBe('http://staging.example.test/de/');
+    expect($decision->url)->toBe('/de/');
     expect($decision->statusCode)->toBe(302);
 });
 
@@ -273,7 +269,7 @@ it('keeps the visitor on an alias host when falling back to the primary base URL
         'primarySiteBaseUrl' => 'http://example.test/de/',
     ]);
 
-    expect($decision->url)->toBe('http://staging.example.test/de/');
+    expect($decision->url)->toBe('/de/');
 });
 
 it('keeps the visitor on an alias host when canonicalizing an unprefixed path', function () {
@@ -284,7 +280,7 @@ it('keeps the visitor on an alias host when canonicalizing an unprefixed path', 
         'currentSiteBaseUrl' => 'http://example.test/de/',
     ]);
 
-    expect($decision->url)->toBe('http://staging.example.test/de/news/foo');
+    expect($decision->url)->toBe('/de/news/foo');
     expect($decision->statusCode)->toBe(301);
 });
 
@@ -306,7 +302,7 @@ it('redirects root to a locale on the current host in a per-edition multisite', 
         ],
     ]);
 
-    expect($decision->url)->toBe('http://edition24.test/fr/');
+    expect($decision->url)->toBe('/fr/');
     expect($decision->statusCode)->toBe(302);
 });
 
@@ -326,7 +322,7 @@ it('does not offer a locale served only under another host', function () {
         ],
     ]);
 
-    expect($decision->url)->toBe('http://edition24.test/de/');
+    expect($decision->url)->toBe('/de/');
 });
 
 it('offers a locale with a relative base URL, which is served on every host', function () {
@@ -341,7 +337,7 @@ it('offers a locale with a relative base URL, which is served on every host', fu
         ],
     ]);
 
-    expect($decision->url)->toBe('http://example.test/fr/');
+    expect($decision->url)->toBe('/fr/');
     expect($decision->statusCode)->toBe(302);
 });
 
@@ -358,7 +354,7 @@ it('does not offer a locale served on the same hostname but a different port', f
         ],
     ]);
 
-    expect($decision->url)->toBe('http://example.test/de/');
+    expect($decision->url)->toBe('/de/');
 });
 
 it('still bails on a second prefix of a locale that has several sites on one host', function () {
@@ -373,9 +369,7 @@ it('still bails on a second prefix of a locale that has several sites on one hos
     ]))->toBeNull();
 });
 
-it('upgrades an http request to a same-host https site URL', function () {
-    // The sites are registered as https; a visitor arriving over plain http
-    // on the same host is moved onto the configured scheme.
+it('leaves transport upgrades to the web server', function () {
     $decision = resolve([
         'rawPath' => '/',
         'hostInfo' => 'http://example.test',
@@ -389,7 +383,7 @@ it('upgrades an http request to a same-host https site URL', function () {
         ],
     ]);
 
-    expect($decision->url)->toBe('https://example.test/de/');
+    expect($decision->url)->toBe('/de/');
 });
 
 it('does not force the registered scheme onto a different (alias) host', function () {
@@ -408,7 +402,7 @@ it('does not force the registered scheme onto a different (alias) host', functio
         ],
     ]);
 
-    expect($decision->url)->toBe('http://staging.example.test/de/');
+    expect($decision->url)->toBe('/de/');
 });
 
 it('falls back to the current site path when the primary site lives on another host', function () {
@@ -428,7 +422,7 @@ it('falls back to the current site path when the primary site lives on another h
         ],
     ]);
 
-    expect($decision->url)->toBe('http://edition24.test/fr/');
+    expect($decision->url)->toBe('/fr/');
     expect($decision->statusCode)->toBe(302);
 });
 
@@ -543,7 +537,7 @@ it('stays put in cross-host mode when the visitor is already on a site serving t
     expect($decision)->toBeNull();
 });
 
-it('redirects to the site base URL verbatim in cross-host mode with prefixed sites', function () {
+it('uses the configured prefix in cross-host mode with prefixed sites', function () {
     // Mixed setup: locales differ by host and by path prefix. The unprefixed
     // path is canonicalized onto the current site's own base URL.
     $decision = resolve([
@@ -558,18 +552,18 @@ it('redirects to the site base URL verbatim in cross-host mode with prefixed sit
         'config' => ['crossHostRedirects' => true],
     ]);
 
-    expect($decision->url)->toBe('http://example.de/de/news/foo');
+    expect($decision->url)->toBe('/de/news/foo');
     expect($decision->statusCode)->toBe(301);
 });
 
-it('preserves the host info when canonicalizing case', function () {
+it('never reflects the host or port when canonicalizing case', function () {
     $decision = resolve([
         'rawPath' => '/DE/',
         'hostInfo' => 'https://staging.example.test:8443',
         'currentAbsoluteUrl' => 'https://staging.example.test:8443/DE/',
     ]);
 
-    expect($decision->url)->toBe('https://staging.example.test:8443/de/');
+    expect($decision->url)->toBe('/de/');
 });
 
 it('serves robots.txt and the root sitemap without moving them under a locale prefix', function () {
@@ -590,5 +584,38 @@ it('still redirects pages that merely mention sitemap', function () {
         'currentAbsoluteUrl' => 'http://example.test/sitemap',
     ]);
 
-    expect($decision->url)->toBe('http://example.test/de/sitemap');
+    expect($decision->url)->toBe('/de/sitemap');
+});
+
+it('compares paths and prefixes in the same mounted coordinate system', function () {
+    $config = [
+        'baseUrl' => '/Sub',
+        'currentSiteBaseUrl' => 'https://example.test/Sub/de/',
+        'localeUrlMap' => ['de' => ['https://example.test/Sub/de/']],
+    ];
+    expect(resolve($config + ['rawPath' => '/Sub/de/News']))->toBeNull()
+        ->and(resolve($config + ['rawPath' => '/Sub/DE/News'])->url)->toBe('/Sub/de/News')
+        ->and(resolve($config + ['rawPath' => '/Sub/News'])->url)->toBe('/Sub/de/News')
+        ->and(resolve($config + ['rawPath' => '/Sub', 'acceptLanguage' => 'de'])->url)->toBe('/Sub/de/');
+});
+
+it('does not redirect a request to itself via fallback or a transport upgrade', function () {
+    foreach (['/', './', 'home/..', '/?go=1', 'https://example.test/'] as $fallback) {
+        expect(resolve(['config' => ['fallback' => $fallback]]))->toBeNull();
+    }
+    expect(resolve([
+        'rawPath' => '/News',
+        'currentSiteBaseUrl' => 'https://example.test/',
+        'localeUrlMap' => ['de' => ['https://example.test/']],
+    ]))->toBeNull();
+});
+
+it('lets sites opt out of 301s and exclude path subtrees', function () {
+    expect(resolve(['rawPath' => '/News', 'config' => ['canonicalizePaths' => false]]))->toBeNull()
+        ->and(resolve(['rawPath' => '/DE/News', 'config' => ['canonicalizePaths' => false]]))->toBeNull()
+        ->and(resolve(['acceptLanguage' => 'en', 'config' => ['canonicalizePaths' => false]])->url)->toBe('/en/')
+        ->and(resolve(['rawPath' => '/api/items', 'config' => ['excludePaths' => ['/api']]]))->toBeNull()
+        ->and(resolve(['rawPath' => '/apiculture', 'config' => ['excludePaths' => ['/api']]])->url)->toBe('/de/apiculture')
+        ->and(resolve(['rawPath' => '/favicon.ico']))->toBeNull()
+        ->and(resolve(['rawPath' => '/.well-known/site']))->toBeNull();
 });
