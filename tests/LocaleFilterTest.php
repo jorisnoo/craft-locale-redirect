@@ -54,3 +54,9 @@ it('returns empty array when only contains no matching locales', function () {
 
     expect($result)->toBe([]);
 });
+
+it('normalizes full locale restrictions without truncating three-letter languages', function () {
+    $map = ['de' => '/de', 'fil' => '/fil', 'fi' => '/fi'];
+    expect(LocaleFilter::filter($map, ['only' => ['DE_ch', 'fil-PH']]))->toBe(['de' => '/de', 'fil' => '/fil'])
+        ->and(LocaleFilter::filter($map, ['exclude' => ['fil_PH']]))->toBe(['de' => '/de', 'fi' => '/fi']);
+});

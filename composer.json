@@ -20,11 +20,21 @@
     ],
     "require": {
         "php": "^8.2",
-        "craftcms/cms": "^5.0"
+        "craftcms/cms": "^5.0",
+        "guzzlehttp/psr7": "^2.6"
     },
     "require-dev": {
+        "phpstan/phpstan": "^2.1",
         "phpunit/phpunit": "^11.0",
         "pestphp/pest": "^3.8"
+    },
+    "scripts": {
+        "check": [
+            "composer validate --strict",
+            "composer audit",
+            "phpstan analyse --no-progress --memory-limit=1G",
+            "pest"
+        ]
     },
     "autoload": {
         "psr-4": {

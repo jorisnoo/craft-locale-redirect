@@ -3,6 +3,9 @@
 namespace Noo\CraftLocaleRedirect;
 
 use Craft;
+use craft\web\Application;
+use craft\web\Response;
+use GuzzleHttp\Psr7\Uri;
 use yii\base\Module as BaseModule;
 
 class Module extends BaseModule
@@ -13,18 +16,19 @@ class Module extends BaseModule
 
         parent::init();
 
-        Craft::$app->onInit(function () {
-            $this->handleRedirect();
-        });
+        $app = Craft::$app;
+        if ($app instanceof Application) {
+            // Craft handles CP resources during init, before this event runs.
+            $app->on(Application::EVENT_BEFORE_REQUEST, fn () => $this->handleRedirect($app));
+        }
     }
 
-    private function handleRedirect(): void
+    private function handleRedirect(Application $app): void
     {
-        $request = Craft::$app->getRequest();
+        $request = $app->getRequest();
 
         if (
-            $request->getIsConsoleRequest()
-            || ! $request->getIsSiteRequest()
+            !$request->getIsSiteRequest()
             || $request->getIsActionRequest()
             || $request->getIsPreview()
             || $request->getIsLivePreview()
@@ -33,15 +37,16 @@ class Module extends BaseModule
             return;
         }
 
-        $config = Craft::$app->config->getConfigFromFile('locale-redirect');
-        $currentSite = Craft::$app->getSites()->getCurrentSite();
+        $config = $app->getConfig()->getConfigFromFile('locale-redirect');
+        $sites = $app->getSites();
+        $currentSite = $sites->getCurrentSite();
 
-        if (in_array($currentSite->handle, $config['excludeSites'] ?? [], true)) {
+        if (!is_array($config) || in_array($currentSite->handle, $config['excludeSites'] ?? [], true)) {
             return;
         }
 
         $currentSiteBaseUrl = $currentSite->getBaseUrl();
-        $primarySiteBaseUrl = Craft::$app->getSites()->getPrimarySite()->getBaseUrl();
+        $primarySiteBaseUrl = $sites->getPrimarySite()->getBaseUrl();
 
         // Without base URLs there is nothing to derive locale prefixes from,
         // and resolve() requires them.
@@ -49,14 +54,31 @@ class Module extends BaseModule
             return;
         }
 
+        // getPathInfo() has already decoded the path, losing encoded separators
+        // and literal plus signs. Keep the client-visible path and mount intact.
+        $path = explode('?', $request->getUrl(), 2)[0];
+        $base = rtrim($request->getBaseUrl(), '/');
+        if (str_starts_with($path . '/', $request->getScriptUrl() . '/')) {
+            return;
+        }
+        $response = $app->getResponse();
+        if (rtrim($path, '/') === $base) {
+            // Both the negotiated redirect and the root page vary by language.
+            $response->getHeaders()->add('Vary', 'Accept-Language');
+            $bypass = $config['bypassParam'] ?? 'localeRedirect';
+            if ($bypass !== '' && $request->getQueryParam($bypass) === 'off') {
+                return;
+            }
+        }
+
         $decision = (new RedirectResolver)->resolve(
-            rawPath: '/' . ltrim($request->getPathInfo(true), '/'),
+            rawPath: $path,
             hostInfo: $request->getHostInfo(),
-            currentAbsoluteUrl: $request->getAbsoluteUrl(),
+            baseUrl: $base,
             currentSiteBaseUrl: $currentSiteBaseUrl,
             primarySiteBaseUrl: $primarySiteBaseUrl,
             acceptLanguage: $request->getHeaders()->get('Accept-Language', ''),
-            localeUrlMap: $this->getLocaleUrlMap(),
+            localeUrlMap: $this->getLocaleUrlMap($sites->getAllSites()),
             config: $config,
         );
 
@@ -64,19 +86,27 @@ class Module extends BaseModule
             return;
         }
 
-        $url = $decision->url;
-        $queryString = $request->getQueryString();
-        if ($queryString !== null && $queryString !== '') {
-            $url .= (str_contains($url, '?') ? '&' : '?') . $queryString;
+        $url = new Uri($decision->url);
+        $query = $request->getQueryStringWithoutPath();
+        // Craft removes the first rewrite parameter. Remove any additional
+        // copies without decoding or coalescing unrelated query parameters.
+        $pathParam = $app->getConfig()->getGeneral()->pathParam;
+        if ($query !== '' && $pathParam) {
+            $query = implode('&', array_filter(explode('&', $query), static fn (string $pair): bool =>
+                urldecode(explode('=', $pair, 2)[0]) !== $pathParam
+            ));
         }
-
-        $response = Craft::$app->getResponse();
-        if ($decision->varyByLocale) {
-            $response->getHeaders()->set('Cache-Control', 'no-store, no-cache, must-revalidate');
-            $response->getHeaders()->set('Vary', 'Accept-Language');
+        if ($query !== '') {
+            $url = $url->withQuery(($url->getQuery() === '' ? '' : $url->getQuery() . '&') . $query);
         }
-        $response->redirect($url, $decision->statusCode)->send();
-        Craft::$app->end();
+        // Yii's redirect() converts relative Locations to absolute URLs using
+        // the request host. Keep our origin-relative Location intact.
+        $response->getHeaders()->set('Cache-Control', 'private, no-store');
+        $header = $request->getIsAjax() ? ($request->getIsPjax() ? 'X-Pjax-Url' : 'X-Redirect') : 'Location';
+        $response->getHeaders()->set($header, (string) $url);
+        $response->format = Response::FORMAT_RAW;
+        $response->setStatusCode($decision->statusCode);
+        $app->end(0, $response);
     }
 
     /**
@@ -85,14 +115,15 @@ class Module extends BaseModule
      * target; collecting every URL keeps this map request-independent and
      * lets the prefix bail check recognize all canonical prefixes.
      *
+     * @param \craft\models\Site[] $sites
      * @return array<string, list<string>>
      */
-    private function getLocaleUrlMap(): array
+    private function getLocaleUrlMap(array $sites): array
     {
         $map = [];
 
-        foreach (Craft::$app->getSites()->getAllSites() as $site) {
-            $locale = strtolower(substr($site->language, 0, 2));
+        foreach ($sites as $site) {
+            $locale = LocaleFilter::primaryLanguage($site->getLanguage());
             $baseUrl = $site->getBaseUrl();
 
             if ($baseUrl !== null) {

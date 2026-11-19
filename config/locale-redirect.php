@@ -66,4 +66,13 @@ return [
 
     'crossHostRedirects' => false,
 
+    // Add the current site's prefix to unprefixed pages with a 301.
+    'canonicalizePaths' => true,
+
+    // Additional mount-relative paths or path subtrees to leave untouched.
+    'excludePaths' => [],
+
+    // Link to /?localeRedirect=off to choose a root locale explicitly.
+    'bypassParam' => 'localeRedirect',
+
 ];

@@ -4,7 +4,7 @@
   "version_files": [],
   "checks": [
     [
-      "vendor/bin/pest"
+      "composer", "check"
     ]
   ]
 }

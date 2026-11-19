@@ -42,9 +42,13 @@ class BrowserLocaleMatcher
 
             foreach (array_slice($segments, 1) as $segment) {
                 $segment = trim($segment);
-                if (str_starts_with($segment, 'q=')) {
+                if (strncasecmp($segment, 'q=', 2) === 0) {
                     $quality = (float) substr($segment, 2);
                 }
+            }
+
+            if ($quality <= 0) {
+                continue;
             }
 
             $entries[] = ['locale' => $locale, 'quality' => $quality];
