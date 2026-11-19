@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.2] - 2026-11-19
+
+### Fixed
+
+- `robots.txt` and XML sitemaps (`sitemap.xml`, `sitemap-*.xml`) are no longer redirected under a locale prefix or lowercased. Per-site sitemaps named after camelCase site handles (e.g. `sitemap-esseboatsDe.xml`) were redirected to a lowercased URL that returned 404.
+
 ## [1.1.1](https://github.com/jorisnoo/craft-locale-redirect/releases/tag/1.1.1) (2026-07-16)
 
 ### Code Refactoring
