@@ -571,3 +571,24 @@ it('preserves the host info when canonicalizing case', function () {
 
     expect($decision->url)->toBe('https://staging.example.test:8443/de/');
 });
+
+it('serves robots.txt and the root sitemap without moving them under a locale prefix', function () {
+    expect(resolve(['rawPath' => '/robots.txt', 'currentAbsoluteUrl' => 'http://example.test/robots.txt']))->toBeNull();
+    expect(resolve(['rawPath' => '/sitemap.xml', 'currentAbsoluteUrl' => 'http://example.test/sitemap.xml']))->toBeNull();
+});
+
+it('keeps the case of per-site sitemaps named after camelCase site handles', function () {
+    expect(resolve([
+        'rawPath' => '/de/sitemap-esseboatsDe.xml',
+        'currentAbsoluteUrl' => 'http://example.test/de/sitemap-esseboatsDe.xml',
+    ]))->toBeNull();
+});
+
+it('still redirects pages that merely mention sitemap', function () {
+    $decision = resolve([
+        'rawPath' => '/sitemap',
+        'currentAbsoluteUrl' => 'http://example.test/sitemap',
+    ]);
+
+    expect($decision->url)->toBe('http://example.test/de/sitemap');
+});

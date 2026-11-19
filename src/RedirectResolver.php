@@ -5,6 +5,14 @@ namespace Noo\CraftLocaleRedirect;
 class RedirectResolver
 {
     /**
+     * Crawler files (robots.txt and XML sitemaps) are served at their exact
+     * path. They are not pages, so they are neither moved under a locale
+     * prefix nor lowercased: a sitemap named after a camelCase site handle
+     * must keep its case to resolve.
+     */
+    private const CRAWLER_FILE_PATTERN = '~/(robots\.txt|sitemap(-[^/]+)?\.xml)$~i';
+
+    /**
      * @param  array<string, list<string>>  $localeUrlMap  Locale code => base URLs of all sites using that
      *                                                     locale, in site order (unfiltered).
      * @param  array<string, mixed>         $config        Plugin config (reads `fallback`, `only`, `exclude`,
@@ -20,6 +28,10 @@ class RedirectResolver
         array $localeUrlMap,
         array $config = [],
     ): ?RedirectDecision {
+        if (preg_match(self::CRAWLER_FILE_PATTERN, $rawPath) === 1) {
+            return null;
+        }
+
         $path = strtolower($rawPath);
 
         foreach ($localeUrlMap as $urls) {

@@ -46,6 +46,8 @@ If no match is found, the visitor is redirected to the primary site's locale pre
 
 Redirects always stay on the host the request came in on — only the locale path prefix is taken from the site base URLs. In a multi-domain setup, only locales served under the current site's host are considered as redirect targets; when the primary site lives on another host, the fallback uses the current site's prefix instead.
 
+`robots.txt` and XML sitemaps (`sitemap.xml`, `sitemap-*.xml`) are never redirected or lowercased, at the root or under a locale prefix, so crawlers find them where they are declared.
+
 ## Configuration
 
 The module works out of the box with no configuration. To customize behavior, create a `config/locale-redirect.php` file in your Craft project:
