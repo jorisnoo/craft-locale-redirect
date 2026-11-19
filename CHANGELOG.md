@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.1] - 2026-11-19
+
+### Fixed
+
+- Leave the mount-relative `/dist` directory and its contents out of locale redirects so missing assets reach the site's normal 404 handler.
+
 ## [2.0.0] - 2026-11-19
 
 ### Changed

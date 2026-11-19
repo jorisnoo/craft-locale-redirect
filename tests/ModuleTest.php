@@ -72,6 +72,20 @@ it('emits a private origin-relative redirect preserving path bytes and non-routi
         ->and($this->response->getHeaders()->get('Cache-Control'))->toBe('private, no-store');
 });
 
+it('leaves dist assets to Craft without swallowing similarly named pages', function (string $path, ?string $location) {
+    $this->request->method('getIsSiteRequest')->willReturn(true);
+    $this->request->method('getMethod')->willReturn('GET');
+    $this->request->method('getQueryString')->willReturn('');
+    $this->request->setUrl('/shop' . $path);
+    $this->app->expects($location === null ? $this->never() : $this->once())->method('end');
+    $this->app->trigger(Application::EVENT_BEFORE_REQUEST);
+    expect($this->response->getHeaders()->get('Location'))->toBe($location);
+})->with([
+    ['/dist', null],
+    ['/dist/assets/missing.js?v=1', null],
+    ['/distribution', '/shop/de/distribution'],
+]);
+
 it('negotiates a three-letter language and retains other Vary headers', function () {
     $this->request->method('getIsSiteRequest')->willReturn(true);
     $this->request->method('getMethod')->willReturn('GET');

@@ -46,7 +46,7 @@ If no browser language matches, the module uses `fallback` or the primary site's
 
 On other site GETs the module also issues **permanent (301) redirects**: `/News/Foo` becomes `/de/News/Foo` if the current site lives at `/de/`, and `/DE/News/Foo` becomes `/de/News/Foo`. Only the configured prefix is canonicalized; case, encoded characters and trailing slashes below it are preserved. Set `canonicalizePaths` to `false` to negotiate the root only.
 
-Crawler files (`robots.txt`, `sitemap.xml`, `sitemap-*.xml`), `/.well-known/`, `/favicon.ico`, and Craft's CP resources are left alone. `excludePaths` adds mount-relative paths or entire subtrees (e.g. `['/api', '/status.txt']`). The module does not redirect console, control panel, action, preview, or explicit front-controller requests.
+The module leaves `/dist/` assets alone, so missing bundles follow the site's normal 404 handling. Crawler files (`robots.txt`, `sitemap.xml`, `sitemap-*.xml`), `/.well-known/`, `/favicon.ico`, and Craft's CP resources are also left alone. Use `excludePaths` for other mount-relative asset directories or routes (e.g. `['/build', '/api', '/status.txt']`). The module does not redirect console, control panel, action, preview, or explicit front-controller requests.
 
 Same-origin redirects use a path-only `Location`: aliases and staging domains stay on their own origin, and request host headers never supply the redirect authority. Enforce HTTPS at the web server or proxy. By default only locales available on the current site's configured host are offered; `crossHostRedirects` enables configured foreign domains.
 
